@@ -45,3 +45,10 @@ temp/
 # *.jpg
 # *.mp4
 # *.webp
+
+# Firebase
+.firebase/
+*-debug.log
+firebase-debug.log
+firestore-debug.log
+serviceAccountKey.json

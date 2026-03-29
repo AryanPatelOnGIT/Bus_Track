@@ -1,10 +1,12 @@
 import { Server } from "socket.io";
+import * as admin from "firebase-admin";
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
   BusLocation,
   PassengerRequest,
 } from "../types";
+import { db } from "../lib/firebaseAdmin";
 
 // Initial data for tracking system
 export const activeBuses = new Map<string, BusLocation>();
@@ -58,7 +60,7 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
       }
     });
 
-    socket.on("driver:location-update", (data) => {
+    socket.on("driver:location-update", async (data) => {
       const metadata = busMetadata.get(data.busId);
       const busLocation: BusLocation = {
         ...data,
@@ -67,6 +69,23 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
       };
       
       activeBuses.set(data.busId, busLocation);
+      
+      // PERSISTENCE: Save to Firestore
+      try {
+        await db.collection("bus_locations").doc(data.busId).set({
+          ...busLocation,
+          lastSeen: new Date().toISOString()
+        }, { merge: true });
+        
+        // Optional: Log movement to history collection for replay
+        await db.collection("bus_history").add({
+          ...busLocation,
+          historyTimestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (err) {
+        console.warn(`Firestore save failed for ${data.busId}:`, err);
+      }
+
       io.to("admin").emit("bus:location-update", busLocation);
       io.to("passengers").emit("bus:location-update", busLocation);
       io.to(`bus:${data.busId}`).emit("bus:location-update", busLocation);
@@ -89,7 +108,7 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
     });
 
     // ── Passenger ──────────────────────────────────────────────────────────
-    socket.on("passenger:request", (data) => {
+    socket.on("passenger:request", async (data) => {
       const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const newRequest: PassengerRequest = {
         ...data,
@@ -98,6 +117,13 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
         createdAt: Date.now(),
       };
       pendingRequests.set(requestId, newRequest);
+      
+      // PERSISTENCE: Save request to Firestore
+      try {
+        await db.collection("passenger_requests").doc(requestId).set(newRequest);
+      } catch (err) {
+        console.warn(`Firestore request save failed:`, err);
+      }
       
       // Dispatch to admin and specific driver
       io.to("admin").emit("request:new", newRequest);

@@ -9,17 +9,16 @@
  * - Start the server and listen on PORT from .env
  */
 
+import "dotenv/config";
+
 import express from "express";
 import http from "http";
 import cors from "cors";
-import dotenv from "dotenv";
 import { Server as SocketServer } from "socket.io";
 import { trackingGateway } from "./sockets/trackingGateway";
 import busRoutes from "./routes/buses";
 import analyticsRoutes from "./routes/analytics";
 import requestRoutes from "./routes/requests";
-
-dotenv.config();
 
 const PORT = process.env.PORT || 4000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
