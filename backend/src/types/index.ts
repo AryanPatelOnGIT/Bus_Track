@@ -46,8 +46,20 @@ export interface FleetStats {
 
 // ── Socket Events ─────────────────────────────────────────────────────────────
 
+// ── Simulation Bus Location (additive — does not replace existing events) ──────
+
+export interface SimBusLocation {
+  busId: string;
+  lat: number;
+  lng: number;
+  heading: number;
+  routeId: string;
+  speed?: number;
+}
+
 export interface ServerToClientEvents {
   "bus:location-update": (data: BusLocation) => void;
+  "bus:location": (data: SimBusLocation) => void;
   "bus:stop-tracking": (data: { busId: string }) => void;
   "request:new": (req: PassengerRequest) => void;
   "request:updated": (req: PassengerRequest) => void;
@@ -62,5 +74,8 @@ export interface ClientToServerEvents {
   "driver:request-done": (data: { requestId: string }) => void;
   "passenger:request": (data: Omit<PassengerRequest, "requestId" | "status" | "createdAt">) => void;
   "passenger:join": () => void;
+  "passenger:watch-route": (data: { routeId: string }) => void;
   "admin:join": () => void;
+  // Simulation: driver emits real-time simulated position
+  "bus:location": (data: SimBusLocation) => void;
 }

@@ -16,6 +16,7 @@ import http from "http";
 import cors from "cors";
 import { Server as SocketServer } from "socket.io";
 import { trackingGateway } from "./sockets/trackingGateway";
+import { registerBusLocationHandlers } from "./socket/busLocationHandler";
 import busRoutes from "./routes/buses";
 import analyticsRoutes from "./routes/analytics";
 import requestRoutes from "./routes/requests";
@@ -41,6 +42,11 @@ const io = new SocketServer(httpServer, {
   cors: { origin: CORS_ORIGIN, methods: ["GET", "POST"] },
 });
 trackingGateway(io); // Delegate all real-time events to gateway - Ref: PRD Sec 1, 2, 3
+
+// ── Additive: bus:location simulation handler ─────────────────────────────────
+io.on("connection", (socket) => {
+  registerBusLocationHandlers(io, socket);
+});
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {

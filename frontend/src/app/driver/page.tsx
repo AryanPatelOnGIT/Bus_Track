@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import TransmitterControls from "@/components/driver/TransmitterControls";
-import DriverNavMap from "@/components/driver/DriverNavMap";
+import DriverMap from "@/components/maps/DriverMap";
+import { BRTS_ROUTES } from "@/config/brtsRoutes";
 import DriverProfileTab from "@/components/driver/DriverProfileTab";
 import { useRoutes } from "@/hooks/useRoutes";
 
@@ -135,13 +136,16 @@ export default function DriverPage() {
       {/* View Container */}
       <div className="relative flex-1 flex flex-col overflow-hidden">
         
-        {/* Map View */}
+        {/* Real GPS Map View */}
         <div className={`absolute inset-0 z-0 flex flex-col ${activeTab === "map" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
           {/* Main Map Background */}
           <div className="flex-1 relative z-0">
-            <DriverNavMap 
-              driverLocation={driverLocation} 
-              selectedRouteId={selectedRouteId}
+            <DriverMap 
+              route={BRTS_ROUTES[0]} 
+              targetStop={BRTS_ROUTES[0].stops[1]} 
+              driverLocation={driverLocation}
+              socketRef={socketRef as any}
+              busId={busId}
             />
           </div>
           

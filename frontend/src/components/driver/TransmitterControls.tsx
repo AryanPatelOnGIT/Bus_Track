@@ -92,7 +92,7 @@ export default function TransmitterControls({
           {!isTracking ? (
             <button
               onClick={onStartTracking}
-              disabled={!busId || !selectedRouteId}
+              disabled={!busId}
               className="w-full py-4 rounded-xl bg-green-500/15 border border-green-500/30 text-green-400 font-bold text-sm hover:bg-green-500/25 transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 flex items-center justify-center gap-2"
             >
               <span className="w-3 h-3 rounded-full bg-green-400" />
