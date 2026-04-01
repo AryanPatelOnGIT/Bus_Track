@@ -1,35 +1,35 @@
-# BusTrack V3 – Advanced Navigation & Synchronization
+# BusTrack V3 – Precision Navigation & Real-Time Syncing
 
-Version 3 of the BusTrack ecosystem introduces professional-grade navigation features and a synchronized real-time experience across all transit interfaces.
+BusTrack V3 is a major technical upgrade focusing on high-accuracy driver navigation and unified multi-interface synchronization. Building on the foundation of V2, this version implements advanced camera control and dynamic data modeling.
 
-## 🚀 Key Improvements in V3
+## 🚀 Version 3 (V3) Highlights
 
-### 1. 3D Driver Navigation Mode
-The Driver interface now features a high-fidelity navigation experience that rivals dedicated GPS hardware:
-- **60° Perspective Tilt**: Provides a cinematic 3D view of the road ahead, optimizing visibility for urban transit environments.
-- **Level 18 Dynamic Zoom**: High-resolution map scale for precise maneuver tracking.
-- **Real-Time Heading Rotation**: The map automatically rotates (`setHeading`) as the bus moves, keeping the transit path oriented 'UP' for the driver.
+### 1. Advanced 3D Driver Navigation
+V3 introduces a professional, turn-by-turn navigation experience for drivers:
+- **60° Perspective Tilt**: Creates a cinematic "dash-cam" view to optimize visibility of upcoming road nodes and traffic alerts.
+- **Dynamic Heading Synchronization**: The map canvas automatically rotates (`setHeading`) to keep the bus's forward direction pointed "UP," providing an intuitive orientation for active transit sessions.
+- **Smart Recenter Logic**: A floating GPS control system that intelligently tracks current progress while allowing instant camera detachment.
 
-### 2. Bulletproof Gesture Interception
-We implemented a custom gesture-interception layer to solve camera "rubber-banding" issues:
-- **Multi-Touch Support**: Precise detection of pointer, scroll, and touch events on the map canvas.
-- **Instant Decoupling**: Manually panning or zooming the map instantly unlocks the camera from the bus, allowing drivers to explore the route freely without being snapped back to center.
-- **Single-Tap Restoration**: Re-engage professional tracking via the dedicated floating GPS target button.
+### 2. High-Performance Gesture Interception
+We solved the "Map Snapshot" and "Rubber-banding" issues seen in previous versions:
+- **Native Event Wrapper**: Implemented a custom event interceptor (`onPointerDown`, `onTouchStart`, `onWheel`) around the Google Maps canvas.
+- **Instant Camera Decoupling**: V3 is the first version to successfully break free from the auto-centering loop the exact millisecond a user interacts with the map. This enables drivers to explore the route manually without any "fighting" from the auto-follow system.
 
-### 3. Dynamic Passenger-Driver Synchronization
-Version 3 eliminates static route mismatches by strictly integrating with Firestore:
-- **Unified Route Data**: Passengers now fetch live transit lines directly from Firestore, ensuring they are always tracking the same data as the drivers.
-- **Route Selector**: A new glassmorphism dashboard element allows passengers to switch between different active routes.
-- **Automatic Bus Discovery**: Bus markers inhabit the map dynamically as soon as a driver starts a broadcast on a matching route ID.
+### 3. Real-Time Firestore Data Linking
+V3 transitions the ecosystem from static route definitions to fully dynamic Firestore modeling:
+- **useRoutes Synchronization**: The Passenger interface now utilizes a live Firestore hook to fetch active transit lines directly from the same database used by the Admin and Driver consoles.
+- **Unified Socket Handshaking**: Fixed sub-second logic where Passenger and Driver sockets were previously using mismatched event names (e.g., `bus:location-update`).
+- **Dynamic Route Selection**: Passengers now have a dedicated drop-down dashboard to switch between multiple active transit routes in real-time.
 
-### 4. Advanced ETA Derivation
-The passenger dashboard now calculates ETAs and distances dynamically based on the current bus position and the route's terminal waypoint, providing real-time arrival estimates.
+### 4. Synthetic Destination Mapping
+For routes that don't have pre-defined stop nodes, V3 implements "Synthetic Waypoint Mapping":
+- **Terminal Derivation**: Automatically calculates the final trip destination based on the last waypoint in the polyline array.
+- **Adaptive ETA Cards**: The glassmorphic ETA cards now dynamically calculate distance-to-endpoint from raw GPS telemetry rather than relying on hardcoded station lists.
 
-## 🏗 Technology Stack
-- **Frontend**: Next.js 14, TailwindCSS v4, Lucide Icons.
-- **Maps**: @vis.gl/react-google-maps (Google Maps Platform).
-- **Backend**: Node.js, Socket.IO, Firebase Admin SDK.
-- **Database**: Google Firestore (Real-time Config & Persistence).
+## 🛠 Project Structure
+- **`/frontend/src/components/maps/DriverMap.tsx`**: Features the new 3D tilt and gesture-interception architecture.
+- **`/frontend/src/app/passenger/page.tsx`**: Implements the V3 dynamic route selector and Firestore sync.
+- **`/backend/src/sockets/trackingGateway.ts`**: Unified socket broadcasting logic for V3 cross-role communication.
 
 ---
-*BusTrack V3 – Precision Transit Intelligence.*
+*BusTrack V3 – Engineered for high-fidelity transit management.*
