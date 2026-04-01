@@ -61,8 +61,5 @@ cd frontend
 npm run dev
 ```
 
-## ⚠️ Important Note on Google Cloud Billing
-The advanced **Routes API v2** and **TrafficLayer** features require a Google Cloud Project with **Billing Enabled**. If billing is not active, the application will default to a clean map view without the route path to avoid "ugly" visual fallbacks.
-
 ---
 *Developed for AryanPatelOnGIT/Bus_Track*
