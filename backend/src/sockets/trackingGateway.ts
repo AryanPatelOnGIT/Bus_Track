@@ -60,6 +60,22 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
       }
     });
 
+    socket.on("driver:route-update", ({ busId, routeId }) => {
+      if (routeId) {
+        busMetadata.set(busId, { routeId });
+        
+        // Immediately fetch the last location and broadcast the change
+        const current = activeBuses.get(busId);
+        if (current) {
+          const update = { ...current, routeId };
+          activeBuses.set(busId, update);
+          io.to("admin").emit("bus:location-update", update);
+          io.to("passengers").emit("bus:location-update", update);
+          io.to(`bus:${busId}`).emit("bus:location-update", update);
+        }
+      }
+    });
+
     socket.on("driver:location-update", async (data) => {
       const metadata = busMetadata.get(data.busId);
       const busLocation: BusLocation = {
@@ -71,19 +87,22 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
       activeBuses.set(data.busId, busLocation);
       
       // PERSISTENCE: Save to Firestore
+      console.log(`📡 [Firestore] Attempting to save location for bus ${data.busId}...`);
       try {
         await db.collection("bus_locations").doc(data.busId).set({
           ...busLocation,
           lastSeen: new Date().toISOString()
         }, { merge: true });
+        console.log(`✅ [Firestore] Successfully updated bus_locations for ${data.busId}`);
         
         // Optional: Log movement to history collection for replay
         await db.collection("bus_history").add({
           ...busLocation,
           historyTimestamp: admin.firestore.FieldValue.serverTimestamp()
         });
+        console.log(`✅ [Firestore] Successfully added bus_history entry for ${data.busId}`);
       } catch (err) {
-        console.warn(`Firestore save failed for ${data.busId}:`, err);
+        console.error(`❌ [Firestore] Save FAILED for ${data.busId}:`, err);
       }
 
       io.to("admin").emit("bus:location-update", busLocation);

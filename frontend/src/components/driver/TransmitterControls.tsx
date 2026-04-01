@@ -3,16 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PREDEFINED_ROUTES } from "@/lib/predefinedRoutes";
 
-interface PassengerRequest {
-  requestId: string;
-  type: "pickup" | "dropoff";
-  lat: number;
-  lng: number;
-  status: "pending" | "accepted" | "completed" | "cancelled";
-}
-
 interface Props {
-  onNewRequest?: (req: PassengerRequest) => void;
+  onNewRequest?: (req: any) => void;
   busId: string;
   setBusId: (id: string) => void;
   selectedRouteId: string;
@@ -20,8 +12,7 @@ interface Props {
   isTracking: boolean;
   onStartTracking: () => void;
   onStopTracking: () => void;
-  requests: PassengerRequest[];
-  onRequestDone: (id: string) => void;
+  onRouteUpdate?: (routeId: string) => void;
 }
 
 const BUS_OPTIONS = ["BUS-001", "BUS-002", "BUS-003", "BUS-004", "BUS-005", "BRTS-101", "BRTS-102", "BRTS-103"];
@@ -34,8 +25,7 @@ export default function TransmitterControls({
   isTracking,
   onStartTracking,
   onStopTracking,
-  requests,
-  onRequestDone,
+  onRouteUpdate,
 }: Props) {
   return (
     <div className="flex flex-col h-full p-5 gap-5">
@@ -64,9 +54,12 @@ export default function TransmitterControls({
         <label className="text-xs text-white/40 uppercase tracking-widest">Select Assigned Path</label>
         <select
           value={selectedRouteId}
-          onChange={(e) => setSelectedRouteId(e.target.value)}
-          disabled={isTracking}
-          className="w-full bg-brand-dark border border-white/15 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/60 disabled:opacity-50 disabled:cursor-not-allowed appearance-none"
+          onChange={(e) => {
+             const newId = e.target.value;
+             setSelectedRouteId(newId);
+             if (isTracking) onRouteUpdate?.(newId);
+          }}
+          className="w-full bg-brand-dark border border-white/15 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/60 appearance-none"
         >
           <option value="">— Choose Path —</option>
           {PREDEFINED_ROUTES.map((r) => (
@@ -106,52 +99,6 @@ export default function TransmitterControls({
 
       {/* Divider */}
       <div className="border-t border-white/10" />
-
-      {/* Requests Panel */}
-      <div className="flex-1 flex flex-col gap-3 overflow-y-auto">
-        <h3 className="text-xs text-white/40 uppercase tracking-widest">
-          Passenger Requests ({requests.length})
-        </h3>
-
-        {requests.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center py-8">
-            <span className="text-3xl">🚏</span>
-            <p className="text-sm text-white/30">No active requests</p>
-            <p className="text-xs text-white/20">Requests from passengers will appear here</p>
-          </div>
-        ) : (
-          requests.map((req) => (
-            <div
-              key={req.requestId}
-              className={`rounded-xl border p-4 space-y-3 ${
-                req.type === "pickup"
-                  ? "border-green-500/25 bg-green-500/10"
-                  : "border-red-500/25 bg-red-500/10"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-xs font-semibold uppercase tracking-wide ${
-                    req.type === "pickup" ? "text-green-400" : "text-red-400"
-                  }`}
-                >
-                  {req.type === "pickup" ? "🚏 Pickup" : "📍 Drop-off"}
-                </span>
-                <span className="text-xs text-white/30">{req.requestId.slice(-6)}</span>
-              </div>
-              <div className="font-mono text-xs text-white/50">
-                {req.lat.toFixed(5)}, {req.lng.toFixed(5)}
-              </div>
-              <button
-                onClick={() => onRequestDone(req.requestId)}
-                className="w-full py-2 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 text-white transition active:scale-95"
-              >
-                ✓ Mark Done
-              </button>
-            </div>
-          ))
-        )}
-      </div>
     </div>
   );
 }

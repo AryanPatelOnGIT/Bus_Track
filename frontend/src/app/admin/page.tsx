@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Header from "@/components/shared/Header";
 import FleetMapOverview from "@/components/admin/FleetMapOverview";
-import AnalyticsDashboard from "@/components/admin/AnalyticsDashboard";
 import { api } from "@/lib/api";
 
 interface FleetStats {
@@ -11,7 +10,6 @@ interface FleetStats {
   activeBuses: number;
   maintenanceBuses: number;
   ongoingTrips: number;
-  passengerCount: number;
 }
 
 export default function AdminPage() {
@@ -45,7 +43,6 @@ export default function AdminPage() {
             { label: "Active Now", value: stats?.activeBuses ?? "—", color: "text-status-active" },
             { label: "Maintenance", value: stats?.maintenanceBuses ?? "—", color: "text-status-maintenance" },
             { label: "Ongoing Trips", value: stats?.ongoingTrips ?? "—" },
-            { label: "Passengers Today", value: stats?.passengerCount ?? "—" },
           ].map((stat) => (
             <div key={stat.label} className="flex flex-col">
               <span className="text-white/40 uppercase tracking-wide text-xs mb-1">{stat.label}</span>
@@ -80,10 +77,6 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Analytics */}
-      <div className="bg-brand-surface/50">
-        <AnalyticsDashboard />
-      </div>
     </div>
   );
 }

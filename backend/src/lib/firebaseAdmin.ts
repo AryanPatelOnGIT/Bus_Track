@@ -11,17 +11,22 @@ if (!admin.apps.length) {
     const rawServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
     
     if (rawServiceAccount) {
-      const serviceAccount = JSON.parse(rawServiceAccount);
-      if (serviceAccount.private_key) {
-        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+      try {
+        const serviceAccount = JSON.parse(rawServiceAccount);
+        if (serviceAccount.private_key) {
+          serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+        }
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+        });
+        console.log(`✅ Firebase Admin initialized via Service Account [Project: ${serviceAccount.project_id}]`);
+      } catch (parseError) {
+        console.error("❌ Failed to parse FIREBASE_SERVICE_ACCOUNT JSON:", parseError);
+        admin.initializeApp();
       }
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
-      console.log("✅ Firebase Admin initialized via Service Account");
     } else {
       admin.initializeApp();
-      console.log("ℹ️ Firebase Admin initialized with default credentials");
+      console.log("ℹ️ Firebase Admin initialized with default credentials (No FIREBASE_SERVICE_ACCOUNT env var found)");
     }
   } catch (error) {
     console.error("❌ Firebase Admin initialization error:", error);

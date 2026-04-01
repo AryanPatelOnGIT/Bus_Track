@@ -8,13 +8,17 @@ export const metadata: Metadata = {
   keywords: ["bus tracking", "BRTS", "Ahmedabad", "public transit", "live GPS"],
 };
 
+import Providers from "@/components/Providers";
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="h-full">
       <body className="min-h-full flex flex-col bg-brand-dark text-white antialiased">
-        {children}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );
