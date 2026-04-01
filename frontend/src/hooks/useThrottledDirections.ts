@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useMapsLibrary } from '@vis.gl/react-google-maps';
+import { computeRouteV2 } from '@/lib/googleMapsRoutes';
 
 // Helper to calculate Haversine distance in meters
 function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -18,22 +18,14 @@ const UPDATE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 const DISTANCE_THRESHOLD_METERS = 250; // Update if bus moves 250+ meters
 
 export function useThrottledDirections(destination: google.maps.LatLngLiteral | null) {
-  const routesLib = useMapsLibrary('routes');
-  const [cachedRoute, setCachedRoute] = useState<google.maps.DirectionsResult | null>(null);
+  const [cachedRoute, setCachedRoute] = useState<any>(null);
   const [etaText, setEtaText] = useState<string>('');
   
   const lastFetchTime = useRef<number>(0);
   const lastFetchLocation = useRef<google.maps.LatLngLiteral | null>(null);
-  const directionsService = useRef<google.maps.DirectionsService | null>(null);
-
-  useEffect(() => {
-    if (routesLib && !directionsService.current) {
-      directionsService.current = new routesLib.DirectionsService();
-    }
-  }, [routesLib]);
 
   const updateRoute = useCallback((currentLocation: google.maps.LatLngLiteral) => {
-    if (!directionsService.current || !destination) return;
+    if (!destination) return;
 
     const now = Date.now();
     const timeElapsed = now - lastFetchTime.current;
@@ -49,30 +41,29 @@ export function useThrottledDirections(destination: google.maps.LatLngLiteral | 
     // Only fetch if initial fetch, time threshold met, or distance threshold met
     if (!lastFetchLocation.current || timeElapsed >= UPDATE_INTERVAL_MS || distanceMoved >= DISTANCE_THRESHOLD_METERS) {
       
-      directionsService.current.route({
-        origin: currentLocation,
-        destination: destination,
-        travelMode: google.maps.TravelMode.DRIVING,
-        drivingOptions: {
-          departureTime: new Date(), // Crucial for duration_in_traffic
-          trafficModel: google.maps.TrafficModel.BEST_GUESS
-        }
-      }, (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK && result) {
+      const fetchRoute = async () => {
+        try {
+          const result = await computeRouteV2({
+             origin: currentLocation,
+             destination: destination
+          });
+
           setCachedRoute(result);
           
-          // Get traffic ETA
-          const leg = result.routes[0].legs[0];
-          if (leg.duration_in_traffic) {
-            setEtaText(leg.duration_in_traffic.text);
-          } else if (leg.duration) {
-             setEtaText(leg.duration.text);
+          if (result.routes && result.routes[0]) {
+            const route = result.routes[0];
+            const durationSeconds = parseInt(route.duration || "0");
+            setEtaText(durationSeconds > 0 ? `${Math.round(durationSeconds / 60)} mins` : "N/A");
           }
           
           lastFetchTime.current = Date.now();
           lastFetchLocation.current = currentLocation;
+        } catch (err) {
+          console.error("Throttled Routes V2 failed:", err);
         }
-      });
+      };
+
+      fetchRoute();
     }
   }, [destination]);
 

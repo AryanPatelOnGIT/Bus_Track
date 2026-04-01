@@ -60,7 +60,7 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
       }
     });
 
-    socket.on("driver:route-update", ({ busId, routeId }) => {
+    socket.on("driver:route-update", async ({ busId, routeId }) => {
       if (routeId) {
         busMetadata.set(busId, { routeId });
         
@@ -72,6 +72,17 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
           io.to("admin").emit("bus:location-update", update);
           io.to("passengers").emit("bus:location-update", update);
           io.to(`bus:${busId}`).emit("bus:location-update", update);
+
+          // PERSISTENCE: Save to Firestore
+          try {
+            await db.collection("bus_locations").doc(busId).set({
+              routeId,
+              lastSeen: new Date().toISOString()
+            }, { merge: true });
+            console.log(`✅ [Firestore] Successfully updated routeId for ${busId}`);
+          } catch (err) {
+            console.error(`❌ [Firestore] Route update FAILED for ${busId}:`, err);
+          }
         }
       }
     });

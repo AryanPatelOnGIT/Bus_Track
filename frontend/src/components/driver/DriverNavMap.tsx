@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Map as GoogleMap, AdvancedMarker, useMap } from "@vis.gl/react-google-maps";
-import { MapPolyline } from "@/components/MapPolyline";
-import { PREDEFINED_ROUTES } from "@/lib/predefinedRoutes";
+import { DirectionsRoute } from "@/components/DirectionsRoute";
+import { useRoutes } from "@/hooks/useRoutes";
+import BusIcon from "@/components/shared/BusIcon";
+import DirectionsPanel from "@/components/shared/DirectionsPanel";
 
 interface Props {
   driverLocation: { lat: number; lng: number; heading: number } | null;
@@ -21,51 +23,71 @@ function Recenter({ location }: { location: { lat: number, lng: number } }) {
   return null;
 }
 
+function TrafficLayer() {
+  const map = useMap();
+  useEffect(() => {
+    if (!map) return;
+    const trafficLayer = new google.maps.TrafficLayer();
+    trafficLayer.setMap(map);
+    return () => trafficLayer.setMap(null);
+  }, [map]);
+  return null;
+}
+
 function DriverNavMapInner({ driverLocation, selectedRouteId }: Props) {
+  const { routes } = useRoutes();
   const [assignedPath, setAssignedPath] = useState<google.maps.LatLngLiteral[]>([]);
+  const [routeResult, setRouteResult] = useState<google.maps.DirectionsResult | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   // Fetch assigned path route
   useEffect(() => {
-    if (selectedRouteId) {
-      const route = PREDEFINED_ROUTES.find((r: any) => r.id === selectedRouteId);
+    if (selectedRouteId && routes.length > 0) {
+      const route = routes.find((r) => r.id === selectedRouteId);
       if (route && route.waypoints.length >= 2) {
-        setAssignedPath(route.waypoints.map(w => ({ lat: w[0], lng: w[1] })));
+        setAssignedPath(route.waypoints.map(w => ({ lat: w.lat, lng: w.lng })));
       }
     } else {
       setAssignedPath([]);
+      setRouteResult(null);
     }
-  }, [selectedRouteId]);
+  }, [selectedRouteId, routes]);
 
   return (
-    <GoogleMap
-      defaultCenter={driverLocation ? { lat: driverLocation.lat, lng: driverLocation.lng } : { lat: 23.0225, lng: 72.5714 }}
-      defaultZoom={16}
-      disableDefaultUI={true}
-      mapId="b1b1b1b1b1b1b1b1"
-    >
-      {driverLocation && <Recenter location={driverLocation} />}
+    <div className="relative h-full w-full">
+      <GoogleMap
+        defaultCenter={driverLocation ? { lat: driverLocation.lat, lng: driverLocation.lng } : { lat: 23.0225, lng: 72.5714 }}
+        defaultZoom={16}
+        disableDefaultUI={true}
+        mapId="b1b1b1b1b1b1b1b1"
+      >
+        <TrafficLayer />
+        
+        {driverLocation && <Recenter location={driverLocation} />}
 
-      {/* Driver Location */}
-      {driverLocation && (
-        <AdvancedMarker position={driverLocation}>
-          <div style={{ transform: `rotate(${driverLocation.heading}deg)` }}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 32 32">
-                 <path d="M16 4 L26 26 L16 22 L6 26 Z" fill="#3b82f6" stroke="white" strokeWidth="2"/>
-              </svg>
-          </div>
-        </AdvancedMarker>
-      )}
+        {/* Driver Location */}
+        {driverLocation && (
+          <AdvancedMarker position={driverLocation}>
+             <BusIcon heading={driverLocation.heading} status="active" size={48} />
+          </AdvancedMarker>
+        )}
 
-      {/* Assigned path (Bus Route) */}
-      {assignedPath.length > 0 && (
-        <MapPolyline 
-           path={assignedPath} 
-           strokeColor="#3b82f6" 
-           strokeWeight={8} 
-           strokeOpacity={0.4}
-        />
-      )}
-    </GoogleMap>
+        {/* Dynamic Route Rendering via Google Maps Directions API */}
+        {assignedPath.length > 0 && (
+            <DirectionsRoute 
+              waypoints={assignedPath} 
+              onRouteResultV2={(res) => setRouteResult(res)}
+            />
+        )}
+      </GoogleMap>
+
+      {/* Real-time Directions Panel */}
+      <DirectionsPanel 
+        result={routeResult} 
+        isOpen={isPanelOpen} 
+        onToggle={() => setIsPanelOpen(!isPanelOpen)} 
+      />
+    </div>
   );
 }
 

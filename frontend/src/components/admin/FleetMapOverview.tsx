@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { Map as GoogleMap, AdvancedMarker } from "@vis.gl/react-google-maps";
-import { MapPolyline } from "@/components/MapPolyline";
-import { PREDEFINED_ROUTES } from "@/lib/predefinedRoutes";
+import { Map as GoogleMap, AdvancedMarker, useMap } from "@vis.gl/react-google-maps";
+import { DirectionsRoute } from "@/components/DirectionsRoute";
+import { useRoutes } from "@/hooks/useRoutes";
+import BusIcon from "@/components/shared/BusIcon";
+import DirectionsPanel from "@/components/shared/DirectionsPanel";
 
 interface BusLocation {
   busId: string;
@@ -18,19 +20,19 @@ interface BusLocation {
   routeId?: string;
 }
 
-function BusIcon({ heading, status }: { heading: number; status: string }) {
-  const color = status === "active" ? "#22c55e" : status === "idle" ? "#f59e0b" : "#ef4444";
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
-      <circle cx="14" cy="14" r="14" fill={color} opacity="0.15" />
-      <g transform={`rotate(${heading}, 14, 14)`}>
-        <path d="M14 4 L22 22 L14 18 L6 22 Z" fill={color} stroke="white" strokeWidth="1.5"/>
-      </g>
-    </svg>
-  );
+function TrafficLayer() {
+  const map = useMap();
+  useEffect(() => {
+    if (!map) return;
+    const trafficLayer = new google.maps.TrafficLayer();
+    trafficLayer.setMap(map);
+    return () => trafficLayer.setMap(null);
+  }, [map]);
+  return null;
 }
 
 function FleetMapOverviewInner() {
+  const { routes } = useRoutes();
   const [buses, setBuses] = useState<Map<string, BusLocation>>(new Map());
 
   useEffect(() => {
@@ -58,43 +60,76 @@ function FleetMapOverviewInner() {
 
   const [predefinedRoute, setPredefinedRoute] = useState<google.maps.LatLngLiteral[]>([]);
   const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
+  const [selectedBusId, setSelectedBusId] = useState<string | null>(null);
+  const [routeResult, setRouteResult] = useState<any>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   useEffect(() => {
-    // Sync with the first active bus's route selection
-    const firstBusWithRoute = Array.from(buses.values()).find(b => b.routeId);
-    const newRouteId = firstBusWithRoute?.routeId || PREDEFINED_ROUTES[0].id;
+    // Sync only when a bus is selected or if we are explicitly tracking
+    const targetBus = selectedBusId ? buses.get(selectedBusId) : null;
+    const newRouteId = targetBus?.routeId || "";
 
-    if (newRouteId !== activeRouteId) {
+    if (newRouteId !== activeRouteId && newRouteId) {
       setActiveRouteId(newRouteId);
-      const route = PREDEFINED_ROUTES.find(r => r.id === newRouteId);
+      const route = routes.find(r => r.id === newRouteId);
       if (route) {
-         setPredefinedRoute(route.waypoints.map(w => ({ lat: w[0], lng: w[1] })));
+         setPredefinedRoute(route.waypoints.map(w => ({ lat: w.lat, lng: w.lng })));
       }
+    } else if (!newRouteId && predefinedRoute.length > 0) {
+      setPredefinedRoute([]);
+      setActiveRouteId(null);
     }
-  }, [buses, activeRouteId]);
+  }, [buses, selectedBusId, activeRouteId, routes, predefinedRoute.length]);
 
   return (
-    <GoogleMap
-      defaultCenter={{ lat: 23.0347, lng: 72.5483 }}
-      defaultZoom={14}
-      disableDefaultUI={true}
-      mapId="d1d1d1d1d1d1d1"
-    >
-      {predefinedRoute.length > 0 && (
-        <MapPolyline 
-          path={predefinedRoute} 
-          strokeColor="#3b82f6" 
-          strokeWeight={6} 
-          strokeOpacity={0.8}
+    <div className="relative w-full h-full">
+      <GoogleMap
+        defaultCenter={{ lat: 23.0347, lng: 72.5483 }}
+        defaultZoom={14}
+        disableDefaultUI={true}
+        mapId="d1d1d1d1d1d1d1"
+        onClick={() => setSelectedBusId(null)}
+      >
+        <TrafficLayer />
+        
+        {/* Dynamic Route Line */}
+        {predefinedRoute.length > 0 && (
+           <DirectionsRoute 
+             waypoints={predefinedRoute} 
+             onRouteResultV2={(res) => setRouteResult(res)}
+           />
+        )}
+
+        {Array.from(buses.values()).map((bus) => (
+          <AdvancedMarker 
+            key={bus.busId} 
+            position={{ lat: bus.lat, lng: bus.lng }}
+            onClick={(e) => {
+              setSelectedBusId(bus.busId);
+              setIsPanelOpen(true);
+            }}
+          >
+             <div className={`transition-transform duration-300 ${selectedBusId === bus.busId ? 'scale-125' : ''}`}>
+               <BusIcon heading={bus.heading} status={bus.status} size={selectedBusId === bus.busId ? 48 : 40} />
+               {selectedBusId === bus.busId && (
+                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                   Selected: {bus.busId}
+                 </div>
+               )}
+             </div>
+          </AdvancedMarker>
+        ))}
+      </GoogleMap>
+
+      {/* Admin Side Directions View */}
+      {selectedBusId && routeResult && (
+        <DirectionsPanel 
+          result={routeResult} 
+          isOpen={isPanelOpen} 
+          onToggle={() => setIsPanelOpen(!isPanelOpen)} 
         />
       )}
-      
-      {Array.from(buses.values()).map((bus) => (
-        <AdvancedMarker key={bus.busId} position={{ lat: bus.lat, lng: bus.lng }}>
-           <BusIcon heading={bus.heading} status={bus.status} />
-        </AdvancedMarker>
-      ))}
-    </GoogleMap>
+    </div>
   );
 }
 
