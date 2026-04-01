@@ -1,55 +1,60 @@
 import Link from "next/link";
-
-const LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/passenger", label: "Passenger App" },
-  { href: "/driver", label: "Driver App" },
-  { href: "/admin", label: "Admin Dashboard" },
-];
+import { Bus, Globe, Send, Mail } from "lucide-react";
 
 export default function Footer() {
   return (
-    <footer className="border-t border-white/10 bg-brand-dark/90">
-      <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Brand */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🚌</span>
-            <span className="font-display font-bold text-lg text-white">
-              Bus<span className="text-[#f5a623]">Track</span>
-            </span>
+    <footer className="footer-bg border-t border-white/5 pt-16 pb-8">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+          {/* Brand & Mission */}
+          <div className="md:col-span-2">
+            <div className="flex items-center gap-2 mb-6">
+              <Bus className="w-6 h-6 text-white" />
+              <span className="font-display font-bold text-2xl tracking-tighter text-white">
+                BusTrack
+              </span>
+            </div>
+            <p className="text-white/40 text-sm leading-relaxed max-w-sm">
+              Modernizing Ahmedabad&apos;s transit infrastructure through live GPS tracking, 
+              interactive navigation, and real-time fleet analytics.
+            </p>
           </div>
-          <p className="text-white/40 text-sm leading-relaxed">
-            Real-time bus tracking for Ahmedabad BRTS. Live for passengers,
-            drivers, and administrators.
-          </p>
+
+          {/* Quick Links */}
+          <div>
+            <h4 className="text-white font-semibold text-sm mb-6 uppercase tracking-widest">Navigation</h4>
+            <ul className="space-y-4">
+              <li><Link href="/passenger" className="text-white/40 hover:text-white transition text-sm">Passenger App</Link></li>
+              <li><Link href="/driver" className="text-white/40 hover:text-white transition text-sm">Driver Portal</Link></li>
+              <li><Link href="/admin" className="text-white/40 hover:text-white transition text-sm">Admin Control</Link></li>
+            </ul>
+          </div>
+
+          {/* Contact & Social */}
+          <div>
+            <h4 className="text-white font-semibold text-sm mb-6 uppercase tracking-widest">Connect</h4>
+            <div className="flex gap-4 mb-6">
+              <Link href="#" className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all">
+                <Globe className="w-4 h-4" />
+              </Link>
+              <Link href="#" className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all">
+                <Send className="w-4 h-4" />
+              </Link>
+              <Link href="mailto:contact@bustrack.in" className="w-10 h-10 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-all">
+                <Mail className="w-4 h-4" />
+              </Link>
+            </div>
+            <div className="text-white/30 text-xs font-mono">contact@bustrack.in</div>
+          </div>
         </div>
 
-        {/* Links */}
-        <div>
-          <h3 className="text-xs text-white/30 uppercase tracking-widest mb-3">Portals</h3>
-          <ul className="space-y-2">
-            {LINKS.map((l) => (
-              <li key={l.href}>
-                <Link
-                  href={l.href}
-                  className="text-sm text-white/50 hover:text-white transition"
-                >
-                  {l.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Badge */}
-        <div className="flex flex-col justify-between">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#f5a623]/30 bg-[#f5a623]/10 text-[#f5a623] text-xs font-medium w-fit">
-            🏙️ Built for Ahmedabad BRTS
+        {/* Bottom Bar */}
+        <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-white/20">
+          <p>© 2026 BusTrack Ahmedabad. Built for Smart Mobility.</p>
+          <div className="flex gap-6">
+            <Link href="#" className="hover:text-white/40 transition">Privacy Policy</Link>
+            <Link href="#" className="hover:text-white/40 transition">Terms of Service</Link>
           </div>
-          <p className="text-white/25 text-xs mt-6">
-            © {new Date().getFullYear()} BusTrack. All rights reserved.
-          </p>
         </div>
       </div>
     </footer>

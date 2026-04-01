@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import {
   Map as GoogleMap,
   AdvancedMarker,
   useMap,
   useMapsLibrary,
-  APIProvider,
 } from "@vis.gl/react-google-maps";
 import ETACard from "@/components/maps/ETACard";
-import { BRTSStop } from "@/config/brtsRoutes";
+import { RouteStop, RouteData } from "@/hooks/useRoutes";
 import { interpolatePosition } from "@/lib/mapUtils";
 import { useGoogleDirections } from "@/hooks/useGoogleDirections";
+import BusIcon from "@/components/shared/BusIcon";
 
 export interface PassengerMapProps {
-  targetStop: BRTSStop;
-  routeId: string;
+  targetStop: RouteStop;
+  route: RouteData;
 }
 
 interface IncomingBusData {
@@ -42,7 +42,7 @@ function TrafficLayer() {
   return null;
 }
 
-function PassengerMapInner({ targetStop, routeId }: PassengerMapProps) {
+function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
   const map = useMap();
   const routesLib = useMapsLibrary("routes");
 
@@ -52,40 +52,88 @@ function PassengerMapInner({ targetStop, routeId }: PassengerMapProps) {
   const rawBusesRef = useRef<Map<string, IncomingBusData>>(new Map());
   const frameRef = useRef<number>(0);
   const [buses, setBuses] = useState<Map<string, IncomingBusData & { displayLat: number; displayLng: number }>>(new Map());
-  
+
   const [liveEtaMinutes, setLiveEtaMinutes] = useState<number>(0);
   const [liveDistKm, setLiveDistKm] = useState<string>("—");
-  
-  // Draw Polyline dynamically using useGoogleDirections natively debounced tracking real origins
+
   const activeBus = Array.from(buses.values())[0];
 
-  const { directionsResult } = useGoogleDirections({
+  /**
+   * 1. FULL ROUTE ROAD-SNAP (The "Whole" Obviously)
+   * This snaps the entire station-to-station route to roads once.
+   */
+  const fullRouteWaypoints = useMemo(() => {
+    if (!route.stops || route.stops.length < 3) return [];
+    // Waypoints for full snap: everything except first and last stop
+    return route.stops.slice(1, -1).map(s => ({ lat: s.lat, lng: s.lng }));
+  }, [route.stops]);
+
+  const { directionsResult: fullRouteResult } = useGoogleDirections({
+    origin: route.stops ? { lat: route.stops[0].lat, lng: route.stops[0].lng } : null,
+    destination: route.stops ? { lat: route.stops[route.stops.length - 1].lat, lng: route.stops[route.stops.length - 1].lng } : null,
+    waypoints: fullRouteWaypoints,
+    enabled: !!route.stops && route.stops.length >= 2,
+  });
+
+  /**
+   * 2. LIVE SEGMENT SNAP (Active Highlight)
+   * Fastest traffic-aware path between the bus and the selected station.
+   */
+  const activeWaypoints = useMemo(() => {
+    if (!route.stops) return [];
+    const targetIndex = route.stops.findIndex(s => s.id === targetStop.id);
+    if (targetIndex === -1) return [];
+    return route.stops.filter((_, idx) => idx < targetIndex).map(s => ({ lat: s.lat, lng: s.lng }));
+  }, [route.stops, targetStop.id]);
+
+  const { directionsResult: activeResult, durationValue, distanceValue } = useGoogleDirections({
     origin: activeBus ? { lat: activeBus.displayLat, lng: activeBus.displayLng } : null,
     destination: { lat: targetStop.lat, lng: targetStop.lng },
+    waypoints: activeWaypoints,
     enabled: true,
   });
 
-  const polyRef = useRef<google.maps.Polyline | null>(null);
+  const fullPolyRef = useRef<google.maps.Polyline | null>(null);
+  const activePolyRef = useRef<google.maps.Polyline | null>(null);
 
   useEffect(() => {
     if (!map) return;
-    polyRef.current = new google.maps.Polyline({
+
+    // Background Full Route (Shadow)
+    fullPolyRef.current = new google.maps.Polyline({
       map,
       strokeColor: "#3b82f6",
-      strokeWeight: 6,
-      strokeOpacity: 0.8,
+      strokeWeight: 4,
+      strokeOpacity: 0.2, // Semi-transparent "Whole" view
+      zIndex: 40,
+    });
+
+    // Active Highlight Segment (Bright)
+    activePolyRef.current = new google.maps.Polyline({
+      map,
+      strokeColor: "#3b82f6",
+      strokeWeight: 7,
+      strokeOpacity: 1.0, // Solid bright highlight
       zIndex: 50,
     });
-    return () => polyRef.current?.setMap(null);
+
+    return () => {
+      fullPolyRef.current?.setMap(null);
+      activePolyRef.current?.setMap(null);
+    };
   }, [map]);
 
   useEffect(() => {
-    if (polyRef.current && directionsResult) {
-      polyRef.current.setPath(
-        directionsResult.routes[0]?.overview_path?.map(p => ({ lat: p.lat(), lng: p.lng() })) || []
-      );
+    if (fullPolyRef.current && fullRouteResult) {
+      fullPolyRef.current.setPath(fullRouteResult.routes[0]?.overview_path || []);
     }
-  }, [directionsResult]);
+  }, [fullRouteResult]);
+
+  useEffect(() => {
+    if (activePolyRef.current && activeResult) {
+      activePolyRef.current.setPath(activeResult.routes[0]?.overview_path || []);
+    }
+  }, [activeResult]);
 
   // Socket Connection structured explicitly mapping room joins & destructured assignments
   useEffect(() => {
@@ -103,7 +151,7 @@ function PassengerMapInner({ targetStop, routeId }: PassengerMapProps) {
       });
 
       socket.on("bus:location-update", (payload: IncomingBusData) => {
-        if (payload.routeId === routeId) {
+        if (payload.routeId === route.id) {
           rawBusesRef.current.set(payload.busId, payload);
         }
       });
@@ -112,12 +160,12 @@ function PassengerMapInner({ targetStop, routeId }: PassengerMapProps) {
     return () => {
       mounted = false;
       if (socketRef.current) {
-        socketRef.current.emit("passenger:leaveRoute", { routeId });
+        socketRef.current.emit("passenger:leaveRoute", { routeId: route.id });
         socketRef.current.disconnect();
       }
       cancelAnimationFrame(frameRef.current);
     };
-  }, [routeId]);
+  }, [route.id]);
 
   // Request Animation Frame exact specification implementation targeting mapUtils directly!
   useEffect(() => {
@@ -153,55 +201,23 @@ function PassengerMapInner({ targetStop, routeId }: PassengerMapProps) {
     return () => cancelAnimationFrame(frameRef.current);
   }, []);
 
-  // DistanceMatrixService logic looping dynamically targeting bestguess traffic model
+  // Update live ETA UI based on summed directions result (waypoint-aware)
   useEffect(() => {
-    if (!routesLib || !activeBus) return;
-
-    const fetchETA = () => {
-      const svc = new google.maps.DistanceMatrixService();
-      svc.getDistanceMatrix(
-        {
-          origins: [{ lat: activeBus.displayLat, lng: activeBus.displayLng }],
-          destinations: [targetStop],
-          travelMode: google.maps.TravelMode.DRIVING,
-          drivingOptions: {
-            trafficModel: google.maps.TrafficModel.BEST_GUESS,
-            departureTime: new Date(),
-          },
-        },
-        (res, status) => {
-          if (status === "OK" && res) {
-            const el = res.rows[0]?.elements[0];
-            if (el?.status === "OK") {
-              const mins = Math.ceil((el.duration_in_traffic?.value ?? el.duration.value) / 60);
-              const kms = ((el.distance.value ?? 0) / 1000).toFixed(1);
-              setLiveEtaMinutes(mins);
-              setLiveDistKm(kms);
-            }
-          }
-        }
-      );
-    };
-
-    fetchETA();
-    const id = setInterval(fetchETA, 30_000);
-    return () => clearInterval(id);
-  }, [routesLib, targetStop, activeBus?.displayLat, activeBus?.displayLng]);
+    if (activeResult) {
+      setLiveEtaMinutes(Math.ceil(durationValue / 60));
+      setLiveDistKm((distanceValue / 1000).toFixed(1));
+    }
+  }, [activeResult, durationValue, distanceValue]);
 
   return (
     <>
-      {/* Skeleton / Initial loading state handled fully within ETACard naturally */}
-        <style>{`
-          @keyframes pulse-border {
-            0%, 100% { border-color: rgba(59, 130, 246, 0.2); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-            50% { border-color: rgba(59, 130, 246, 1); box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
-          }
-          @keyframes ripple {
-            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
-            70% { box-shadow: 0 0 0 30px rgba(59, 130, 246, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-          }
-        `}</style>
+      <style>{`
+        @keyframes ripple {
+          0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
+          70% { box-shadow: 0 0 0 30px rgba(59, 130, 246, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+      `}</style>
       <GoogleMap
         defaultCenter={targetStop}
         zoom={15}
@@ -217,32 +233,21 @@ function PassengerMapInner({ targetStop, routeId }: PassengerMapProps) {
             position={{ lat: bus.displayLat, lng: bus.displayLng }}
             zIndex={100}
           >
-            <div
-              style={{
-                transform: `rotate(${bus.heading}deg)`,
-                transition: "transform 0.1s linear",
-              }}
-            >
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-                <rect x="6" y="2" width="12" height="20" rx="3" fill="#1A73E8" stroke="#ffffff" strokeWidth="1.5" />
-                <rect x="8" y="4" width="8" height="4" rx="1" fill="#ffffff" />
-                <rect x="8" y="10" width="8" height="8" rx="1" fill="#ffffff" />
-              </svg>
-            </div>
+            <BusIcon heading={bus.heading} status={bus.status} size={48} />
           </AdvancedMarker>
         ))}
 
-        {/* Target Stop Marker pulsing blue dot label above securely styled */}
+        {/* Target Stop Marker pulsing dot label above securely styled */}
         <AdvancedMarker position={targetStop}>
           <div className="relative flex flex-col items-center">
-            <span className="mb-2 px-3 py-1 bg-white border border-black/10 text-black rounded-full text-[10px] whitespace-nowrap z-50 shadow-xl font-bold uppercase tracking-widest">
+            <span className="mb-3 px-4 py-1.5 bg-brand-surface border border-white/10 text-white rounded-xl text-[10px] whitespace-nowrap z-50 shadow-3xl font-black uppercase tracking-[0.2em]">
               {targetStop.shortName}
             </span>
-            <div 
-              className="absolute w-6 h-6 bg-blue-500 rounded-full"
+            <div
+              className="absolute w-6 h-6 bg-white/20 rounded-full"
               style={{ animation: "ripple 2s infinite" }}
             />
-            <div className="flex items-center justify-center w-6 h-6 bg-blue-600 border-[3px] border-white rounded-full z-10 shadow-lg" />
+            <div className="flex items-center justify-center w-6 h-6 bg-white border-4 border-brand-dark rounded-full z-10 shadow-3xl" />
           </div>
         </AdvancedMarker>
       </GoogleMap>
@@ -254,7 +259,7 @@ function PassengerMapInner({ targetStop, routeId }: PassengerMapProps) {
           stopShortName={targetStop.shortName}
           etaMinutes={liveEtaMinutes || 0}
           distanceKm={liveDistKm}
-          viaRoad={"C.G. Road"}
+          viaRoad={"Whole Subscribed Path"}
           isArriving={liveEtaMinutes <= 2 && liveEtaMinutes > 0}
           hasArrived={liveEtaMinutes === 0 && !!activeBus}
           isLoading={!activeBus}

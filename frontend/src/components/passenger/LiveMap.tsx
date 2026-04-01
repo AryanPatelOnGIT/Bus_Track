@@ -5,10 +5,10 @@ import dynamic from "next/dynamic";
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap } from "@vis.gl/react-google-maps";
 import { DirectionsRoute } from "@/components/DirectionsRoute";
 import { useRoutes } from "@/hooks/useRoutes";
-import { MapPolyline } from "@/components/MapPolyline";
 import { useThrottledDirections } from "@/hooks/useThrottledDirections";
 import BusIcon from "@/components/shared/BusIcon";
 import DirectionsPanel from "@/components/shared/DirectionsPanel";
+import { Bus, Wifi, WifiOff, Map as MapIcon, Loader2 } from "lucide-react";
 
 export interface BusLocation {
   busId: string;
@@ -25,8 +25,6 @@ interface LiveMapProps {
   onMapClick?: (lat: number, lng: number) => void;
   selectedPin?: { lat: number; lng: number } | null;
 }
-
-// ... (local BusIcon removed) ...
 
 function TrafficLayerActivator() {
   const map = useMap();
@@ -46,14 +44,12 @@ function LiveMapInner({ onMapClick, selectedPin }: LiveMapProps) {
   const [connected, setConnected] = useState(false);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
-  // Throttled ETA System
   const destination = useMemo(() => {
     return selectedPin ? { lat: selectedPin.lat, lng: selectedPin.lng } : null;
   }, [selectedPin]);
   
-  const { cachedRoute, etaText, updateRoute } = useThrottledDirections(destination);
+  const { cachedRoute, updateRoute } = useThrottledDirections(destination);
 
-  // ── Socket: join passenger room to receive bus broadcasts ────────────────
   useEffect(() => {
     import("socket.io-client").then(({ io }) => {
       const socket = io(process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000", {
@@ -80,7 +76,6 @@ function LiveMapInner({ onMapClick, selectedPin }: LiveMapProps) {
     return () => { socketRef.current?.disconnect(); };
   }, []);
 
-  // Update ETA logic based on first active bus
   useEffect(() => {
     const activeBus = Array.from(buses.values()).find(b => b.status === "active");
     if (activeBus && destination) {
@@ -88,12 +83,10 @@ function LiveMapInner({ onMapClick, selectedPin }: LiveMapProps) {
     }
   }, [buses, destination, updateRoute]);
 
-  // ── Dynamic route tracking based on active buses ──────────────────
   const [predefinedRoute, setPredefinedRoute] = useState<google.maps.LatLngLiteral[]>([]);
   const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Only show route if a bus is actively broadcasting one
     const activeBus = Array.from(buses.values()).find(b => b.routeId);
     const newRouteId = activeBus?.routeId || "";
     
@@ -125,51 +118,61 @@ function LiveMapInner({ onMapClick, selectedPin }: LiveMapProps) {
       >
         <TrafficLayerActivator />
 
-        {/* Dynamic Predefined Route Line via Google Maps Directions API */}
         {predefinedRoute.length > 0 && (
           <DirectionsRoute waypoints={predefinedRoute} />
         )}
 
-        {/* Live buses */}
         {Array.from(buses.values()).map(bus => (
           <AdvancedMarker key={bus.busId} position={{ lat: bus.lat, lng: bus.lng }}>
              <BusIcon heading={bus.heading} status={bus.status} size={48} />
           </AdvancedMarker>
         ))}
 
-        {/* Selected Pin */}
         {selectedPin && (
           <AdvancedMarker position={selectedPin}>
-             <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#f5a623", border: "3px solid white", boxShadow: "0 0 0 4px rgba(245,166,35,0.3)" }}></div>
+             <div className="w-5 h-5 rounded-full bg-white border-4 border-brand-dark shadow-2xl scale-125" />
           </AdvancedMarker>
         )}
       </GoogleMap>
 
-      {/* Directions & ETA Panel */}
       <DirectionsPanel 
         result={cachedRoute} 
         isOpen={isPanelOpen} 
         onToggle={() => setIsPanelOpen(!isPanelOpen)} 
       />
 
-
-      {/* Overlays */}
-      <div style={{ position: "absolute", bottom: 16, right: 16, zIndex: 1000, display: "flex", alignItems: "center", gap: 8, background: "rgba(10,22,40,0.85)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "white" }}>
-        <span style={{ width: 8, height: 8, borderRadius: "50%", background: connected ? "#22c55e" : "#ef4444" }} />
-        {connected ? "Live" : "Connecting…"}
+      {/* Connection Status Overlay - Refined Block */}
+      <div className="absolute bottom-6 right-6 z-[1000] flex items-center gap-2.5 bg-brand-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl px-4 py-2.5 shadow-3xl overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full bg-white/5 opacity-20 pointer-events-none" />
+        {connected ? (
+          <>
+            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Live Infrastructure</span>
+          </>
+        ) : (
+          <>
+            <Loader2 className="w-3 h-3 text-red-500 animate-spin" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-red-500">Reconnecting...</span>
+          </>
+        )}
       </div>
 
       {buses.size > 0 && (
-        <div style={{ position: "absolute", top: 16, right: 16, zIndex: 1000, background: "rgba(10,22,40,0.85)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "white" }}>
-          🚌 {buses.size} bus{buses.size !== 1 ? "es" : ""} active
+        <div className="absolute top-24 right-6 z-[1000] bg-brand-surface/90 backdrop-blur-xl border border-white/5 rounded-2xl px-5 py-3 shadow-3xl flex items-center gap-3">
+          <Bus className="w-4 h-4 text-white/40" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-white/80">
+            {buses.size} Active Node{buses.size !== 1 ? "s" : ""}
+          </span>
         </div>
       )}
 
-      {/* Active Route Overlay */}
+      {/* Active Route Identifier */}
       {activeRouteId && (
-        <div style={{ position: "absolute", bottom: 16, left: 16, zIndex: 1000, background: "rgba(10,22,40,0.85)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "white" }}>
-          <span style={{ color: "#3b82f6", fontWeight: "bold", marginRight: 4 }}>Route:</span>
-          {routes.find(r => r.id === activeRouteId)?.name || "Unknown"}
+        <div className="absolute bottom-6 left-6 z-[1000] bg-brand-surface/90 backdrop-blur-xl border border-white/5 rounded-2xl px-5 py-3 shadow-3xl flex items-center gap-3">
+          <MapIcon className="w-4 h-4 text-white/20" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-white/80">
+            Path: <span className="text-white ml-1">{routes.find(r => r.id === activeRouteId)?.name || "External"}</span>
+          </span>
         </div>
       )}
     </div>

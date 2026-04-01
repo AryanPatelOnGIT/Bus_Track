@@ -3,13 +3,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import TransmitterControls from "@/components/driver/TransmitterControls";
 import DriverMap from "@/components/maps/DriverMap";
-import { BRTS_ROUTES } from "@/config/brtsRoutes";
 import DriverProfileTab from "@/components/driver/DriverProfileTab";
 import { useRoutes } from "@/hooks/useRoutes";
+import { Navigation, User } from "lucide-react";
 
 type Tab = "map" | "profile";
-
-
 
 export default function DriverPage() {
   const { routes } = useRoutes();
@@ -22,13 +20,13 @@ export default function DriverPage() {
   const socketRef = useRef<ReturnType<typeof import("socket.io-client").io> | null>(null);
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Setup Socket
-  // Auto-select first route when routes load
   useEffect(() => {
     if (routes.length > 0 && !selectedRouteId) {
       setSelectedRouteId(routes[0].id);
     }
   }, [routes, selectedRouteId]);
+
+  const activeRoute = routes.find(r => r.id === selectedRouteId);
 
   useEffect(() => {
     import("socket.io-client").then(({ io }) => {
@@ -36,8 +34,6 @@ export default function DriverPage() {
         transports: ["websocket"],
       });
       socketRef.current = socket;
-
-
     });
 
     return () => {
@@ -64,7 +60,7 @@ export default function DriverPage() {
               lng: pos.coords.longitude,
               heading: pos.coords.heading || 0,
             };
-            const speed = (pos.coords.speed || 0) * 3.6; // m/s to km/h
+            const speed = (pos.coords.speed || 0) * 3.6; 
             
             setDriverLocation(newLoc);
             
@@ -80,16 +76,13 @@ export default function DriverPage() {
             });
           },
           (err) => {
-            console.warn("Geolocation failed/denied. Using mock location for testing.", err);
-            // Fallback for desktop testing where GPS might be unavailable
+            console.warn("Geolocation fallback.");
             const mockLoc = {
                lat: 23.0347 + (Math.random() * 0.005 - 0.0025),
                lng: 72.5483 + (Math.random() * 0.005 - 0.0025),
                heading: Math.floor(Math.random() * 360)
             };
-            
             setDriverLocation(mockLoc);
-            
             socketRef.current?.emit("driver:location-update", {
               busId,
               driverId: "drv_1",
@@ -106,10 +99,7 @@ export default function DriverPage() {
       }
     };
 
-    // Initial update
     updateLocation();
-    
-    // Set interval for 3 seconds
     intervalIdRef.current = setInterval(updateLocation, 3000);
   }, [busId, selectedRouteId]);
 
@@ -136,20 +126,19 @@ export default function DriverPage() {
       {/* View Container */}
       <div className="relative flex-1 flex flex-col overflow-hidden">
         
-        {/* Real GPS Map View */}
         <div className={`absolute inset-0 z-0 flex flex-col ${activeTab === "map" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-          {/* Main Map Background */}
           <div className="flex-1 relative z-0">
-            <DriverMap 
-              route={BRTS_ROUTES[0]} 
-              targetStop={BRTS_ROUTES[0].stops[1]} 
-              driverLocation={driverLocation}
-              socketRef={socketRef as any}
-              busId={busId}
-            />
+            {activeRoute && (
+              <DriverMap 
+                route={activeRoute} 
+                targetStop={activeRoute.stops?.[1] || activeRoute.stops?.[0]} 
+                driverLocation={driverLocation}
+                socketRef={socketRef as any}
+                busId={busId}
+              />
+            )}
           </div>
           
-          {/* Floating Bottom Sheet for Controls */}
           <div className="absolute bottom-0 w-full z-20">
             <TransmitterControls
               busId={busId}
@@ -164,33 +153,32 @@ export default function DriverPage() {
           </div>
         </div>
         
-        {/* Profile View */}
         <div className={`absolute inset-0 z-10 flex flex-col bg-brand-dark transition-opacity duration-300 ${activeTab === "profile" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
           <DriverProfileTab driverId="drv_1" busId={busId} />
         </div>
       </div>
 
-      {/* Bottom Navigation */}
-      <nav className="shrink-0 bg-brand-dark/95 border-t border-white/10 backdrop-blur-md pb-safe z-30 relative">
-        <div className="flex items-center justify-around px-2 py-1">
+      {/* Bottom Navigation - Refined Charcoal Mono */}
+      <nav className="shrink-0 bg-brand-surface/80 border-t border-white/5 backdrop-blur-2xl pb-safe z-30 relative">
+        <div className="flex items-center justify-around px-4 py-2 max-w-md mx-auto">
           <button
             onClick={() => setActiveTab("map")}
-            className={`flex flex-col items-center justify-center p-3 flex-1 rounded-2xl transition-colors ${
-              activeTab === "map" ? "text-blue-400 bg-white/5" : "text-white/40 hover:text-white/70"
+            className={`flex flex-col items-center justify-center py-3 flex-1 rounded-2xl transition-all duration-300 ${
+              activeTab === "map" ? "text-white bg-white/5 transform scale-105" : "text-white/30 hover:text-white/60"
             }`}
           >
-            <span className="text-2xl mb-1 drop-shadow-sm">🗺️</span>
-            <span className="text-[10px] font-bold tracking-widest uppercase">Drive</span>
+            <Navigation className={`w-5 h-5 mb-1.5 ${activeTab === "map" ? "text-white" : "opacity-40"}`} />
+            <span className="text-[9px] font-black tracking-[0.15em] uppercase">Drive View</span>
           </button>
           
           <button
             onClick={() => setActiveTab("profile")}
-            className={`flex flex-col items-center justify-center p-3 flex-1 rounded-2xl transition-colors ${
-              activeTab === "profile" ? "text-emerald-400 bg-white/5" : "text-white/40 hover:text-white/70"
+            className={`flex flex-col items-center justify-center py-3 flex-1 rounded-2xl transition-all duration-300 ${
+              activeTab === "profile" ? "text-white bg-white/5 transform scale-105" : "text-white/30 hover:text-white/60"
             }`}
           >
-            <span className="text-2xl mb-1 drop-shadow-sm">👨‍✈️</span>
-            <span className="text-[10px] font-bold tracking-widest uppercase">Profile</span>
+            <User className={`w-5 h-5 mb-1.5 ${activeTab === "profile" ? "text-white" : "opacity-40"}`} />
+            <span className="text-[9px] font-black tracking-[0.15em] uppercase">Profile</span>
           </button>
         </div>
       </nav>

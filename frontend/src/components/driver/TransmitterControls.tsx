@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRoutes } from "@/hooks/useRoutes";
+import { Bus, Navigation, Play, Square, ChevronDown, ChevronUp, MapPin } from "lucide-react";
 
 interface Props {
   onNewRequest?: (req: any) => void;
@@ -17,7 +18,6 @@ interface Props {
 
 export default function TransmitterControls({
   busId,
-  setBusId,
   selectedRouteId,
   setSelectedRouteId,
   isTracking,
@@ -28,7 +28,6 @@ export default function TransmitterControls({
   const [isExpanded, setIsExpanded] = useState(true);
   const { routes } = useRoutes();
 
-  // Auto-collapse when tracking starts
   useEffect(() => {
     if (isTracking) {
       setIsExpanded(false);
@@ -38,73 +37,86 @@ export default function TransmitterControls({
   }, [isTracking]);
 
   return (
-    <div className={`flex flex-col w-full bg-brand-dark/95 backdrop-blur-md rounded-t-3xl border-t border-white/10 shadow-2xl transition-all duration-300 ${isExpanded ? 'h-auto max-h-[80vh] pb-6' : 'h-auto pb-4'} overflow-hidden relative`}>
+    <div className={`flex flex-col w-full bg-brand-surface/90 backdrop-blur-2xl rounded-t-[2.5rem] border-t border-white/5 shadow-3xl transition-all duration-500 overflow-hidden relative`}>
       {/* Drag handle / toggle indicator */}
       <div 
-        className="w-full flex justify-center pt-3 pb-2 cursor-pointer"
+        className="w-full flex justify-center pt-4 pb-2 cursor-pointer group"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="w-12 h-1.5 bg-white/20 rounded-full" />
+        <div className="w-12 h-1.5 bg-white/10 rounded-full group-hover:bg-white/20 transition-all" />
       </div>
 
-      <div className={`px-5 gap-5 flex-col ${isExpanded ? 'flex' : 'hidden'}`}>
+      <div className={`px-8 gap-8 flex-col ${isExpanded ? 'flex pb-10' : 'hidden'}`}>
         {/* Header */}
-        <div>
-          <h2 className="font-display font-bold text-white text-lg" style={{ fontFamily: "Outfit, sans-serif" }}>
-            Driver Panel
-          </h2>
-          <p className="text-xs text-white/40 mt-0.5">Broadcast your live GPS position</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-display font-bold text-white text-2xl tracking-tight" style={{ fontFamily: "Outfit, sans-serif" }}>
+              Transmitter <span className="text-white/20">Control</span>
+            </h2>
+            <p className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] mt-1">Live Telemetry Control Panel</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center">
+             <Navigation className="w-5 h-5 text-white/40" />
+          </div>
         </div>
 
         {/* Active Bus Info */}
-        <div className="space-y-2">
-          <label className="text-xs text-white/40 uppercase tracking-widest">Active Bus</label>
-          <div className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🚌</span>
-              <span className="font-semibold">{busId || "BRTS-101"}</span>
+        <div className="space-y-3">
+          <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Hardware Identity</label>
+          <div className="w-full bg-brand-dark/40 border border-white/5 rounded-2xl px-6 py-4 text-white text-sm flex items-center justify-between shadow-inner">
+            <div className="flex items-center gap-4">
+              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                <Bus className="w-4 h-4 text-white/50" />
+              </div>
+              <span className="font-black font-mono tracking-widest text-white/80">{busId || "BRTS-101"}</span>
             </div>
-            <span className="text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 px-2 py-0.5 rounded-full uppercase">Fleet Active</span>
+            <div className="flex items-center gap-2">
+               <span className="w-2 h-2 rounded-full bg-status-active shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+               <span className="text-[9px] font-black tracking-widest text-status-active uppercase">Operational</span>
+            </div>
           </div>
         </div>
 
         {/* Path Selector */}
-        <div className="space-y-2">
-          <label className="text-xs text-white/40 uppercase tracking-widest">Select Assigned Path</label>
-          <select
-            value={selectedRouteId}
-            onChange={(e) => {
-               const newId = e.target.value;
-               setSelectedRouteId(newId);
-               if (isTracking) onRouteUpdate?.(newId);
-            }}
-            className="w-full bg-brand-dark border border-white/15 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/60 appearance-none"
-          >
-            <option value="">— Choose Path —</option>
-            {routes.map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
+        <div className="space-y-3">
+          <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Active Assignment</label>
+          <div className="relative">
+            <select
+              value={selectedRouteId}
+              onChange={(e) => {
+                 const newId = e.target.value;
+                 setSelectedRouteId(newId);
+                 if (isTracking) onRouteUpdate?.(newId);
+              }}
+              className="w-full h-14 bg-brand-dark/40 border border-white/5 rounded-2xl px-6 py-2.5 text-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-white/10 appearance-none shadow-inner"
+            >
+              <option value="">— NO PATH ASSIGNED —</option>
+              {routes.map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 pointer-events-none" />
+          </div>
         </div>
         
         {/* Expanded Tracking Controls */}
-        <div className="space-y-3 pt-2">
+        <div className="pt-4">
           {!isTracking ? (
             <button
               onClick={onStartTracking}
               disabled={!busId}
-              className="w-full py-4 rounded-xl bg-green-500/15 border border-green-500/30 text-green-400 font-bold text-sm hover:bg-green-500/25 transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 flex items-center justify-center gap-2"
+              className="w-full py-5 rounded-[1.5rem] bg-white text-brand-dark font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-3xl flex items-center justify-center gap-3 tracking-[0.1em]"
             >
-              <span className="w-3 h-3 rounded-full bg-green-400" />
-              START TRACKING
+              <Play className="w-4 h-4 fill-brand-dark" />
+              GO LIVE
             </button>
           ) : (
             <button
               onClick={onStopTracking}
-              className="w-full py-4 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 font-bold text-sm hover:bg-red-500/25 transition active:scale-95 flex items-center justify-center gap-2"
+              className="w-full py-5 rounded-[1.5rem] bg-red-500 text-white font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-3xl shadow-red-500/20 flex items-center justify-center gap-3 tracking-[0.1em]"
             >
-              <span className="w-3 h-3 rounded-full bg-red-400 animate-pulse" />
-              STOP TRACKING
+              <Square className="w-4 h-4 fill-white" />
+              TERMINAL FEED
             </button>
           )}
         </div>
@@ -112,21 +124,24 @@ export default function TransmitterControls({
 
       {/* Collapsed View (Live Tracking Bar) */}
       {!isExpanded && isTracking && (
-        <div className="px-5 pb-2 flex items-center justify-between gap-4">
-          <div className="flex flex-col" onClick={() => setIsExpanded(true)}>
-             <div className="flex items-center gap-2">
-               <span className="w-2.5 h-2.5 rounded-full bg-green-400 bus-ping" />
-               <span className="text-xs font-bold text-green-400 uppercase tracking-wider">Broadcasting</span>
+        <div className="px-8 pb-6 flex items-center justify-between gap-4 animate-slide-up">
+          <div className="flex flex-col flex-1" onClick={() => setIsExpanded(true)}>
+             <div className="flex items-center gap-2 mb-1">
+               <span className="w-2.5 h-2.5 rounded-full bg-status-active shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
+               <span className="text-[10px] font-black text-status-active uppercase tracking-widest">TRANSMITTING</span>
              </div>
-             <span className="text-sm font-medium text-white/90 truncate max-w-[180px]">
-                {routes.find(r => r.id === selectedRouteId)?.name || "Unknown Route"}
-             </span>
+             <div className="flex items-center gap-2">
+                <MapPin className="w-3.5 h-3.5 text-white/20" />
+                <span className="text-sm font-bold text-white tracking-tight truncate max-w-[200px]">
+                  {routes.find(r => r.id === selectedRouteId)?.name || "SYSTEM OVERRIDE"}
+                </span>
+             </div>
           </div>
           <button
             onClick={onStopTracking}
-            className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-xs font-bold uppercase hover:bg-red-500/30 active:scale-95 transition"
+            className="h-12 px-6 rounded-2xl bg-white/5 border border-white/5 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white transition-all shadow-2xl"
           >
-            STOP
+            OFFLINE
           </button>
         </div>
       )}

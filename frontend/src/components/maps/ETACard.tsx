@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { MapPin } from "lucide-react";
+import { MapPin, Bus, CheckCircle, Navigation } from "lucide-react";
 
 export interface ETACardProps {
   stopName: string;
@@ -26,13 +26,13 @@ export default function ETACard({
 }: ETACardProps) {
   if (isLoading) {
     return (
-      <div className="w-full max-w-sm backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-4 shadow-xl flex flex-col gap-3 animate-pulse">
-        <div className="h-8 bg-white/10 rounded-xl" />
-        <div className="flex gap-3">
-          <div className="w-8 h-8 bg-white/10 rounded-full" />
-          <div className="flex-1 space-y-2">
-            <div className="h-4 bg-white/10 rounded w-1/2" />
-            <div className="h-3 bg-white/10 rounded w-1/4" />
+      <div className="w-full max-w-sm bg-brand-surface rounded-[2rem] border border-white/5 p-8 shadow-3xl flex flex-col gap-6 animate-pulse">
+        <div className="h-4 bg-white/5 rounded-full w-1/3" />
+        <div className="flex gap-4">
+          <div className="w-12 h-12 bg-white/5 rounded-2xl" />
+          <div className="flex-1 space-y-3">
+            <div className="h-4 bg-white/5 rounded w-1/2" />
+            <div className="h-3 bg-white/5 rounded w-1/4" />
           </div>
         </div>
       </div>
@@ -40,53 +40,63 @@ export default function ETACard({
   }
 
   return (
-    <div className="w-full max-w-sm">
-      {/* Arrival Alert Banner */}
+    <div className="w-full max-w-sm space-y-4">
+      {/* Arrival Alert Banner - Charcoal Mono Style */}
       {isArriving && !hasArrived && (
         <div 
-          className="mb-2 backdrop-blur-md bg-emerald-500/90 border-2 border-transparent rounded-xl px-4 py-2.5 shadow-xl flex items-center justify-center gap-2"
-          style={{ animation: "pulse-border 1.5s infinite" }}
+          className="bg-emerald-500/10 border border-emerald-500/20 rounded-[1.5rem] px-6 py-4 shadow-3xl flex items-center gap-4 animate-slide-up"
         >
-          <span className="text-lg">🚌</span>
-          <div className="flex flex-col text-white">
-            <span className="font-black text-sm tracking-wide leading-tight">Your bus is almost here!</span>
-            <span className="font-medium text-[10px] leading-tight opacity-90">Arriving at {stopShortName} in ~{etaMinutes} min</span>
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+             <Bus className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-black text-xs uppercase tracking-widest text-emerald-400">Proximal Arrival</span>
+            <span className="font-bold text-[10px] text-white/40 uppercase tracking-widest mt-1">{stopShortName} in ~{etaMinutes} min</span>
           </div>
         </div>
       )}
 
       {/* Arrived Banner */}
       {hasArrived && (
-        <div className="mb-2 bg-green-500 rounded-xl px-4 py-3 shadow-xl flex items-center justify-center gap-2 border-0">
-          <span className="text-white font-bold text-sm tracking-wide">✅ Bus has arrived at {stopName}</span>
+        <div className="bg-emerald-500 border border-emerald-400 rounded-[1.5rem] px-8 py-5 shadow-3xl flex items-center justify-center gap-3 animate-slide-up">
+           <CheckCircle className="w-5 h-5 text-brand-dark" />
+           <span className="text-brand-dark font-black text-xs uppercase tracking-widest leading-none">Vehicle Synchronized at {stopName}</span>
         </div>
       )}
 
-      {/* Main Glassmorphism ETA Card */}
+      {/* Main ETA Card - Refined Block Style */}
       {!hasArrived && (
-        <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-2xl p-4 shadow-xl w-full flex flex-col gap-3">
+        <div className="bg-brand-surface/90 backdrop-blur-2xl border border-white/5 rounded-[2.5rem] p-8 shadow-3xl w-full flex flex-col gap-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-[50px] pointer-events-none" />
+          
           {/* Top: Location Context */}
-          <div className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-xl">
-            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/50">
-              <MapPin className="w-3 h-3 text-blue-400" />
+          <div className="flex items-center gap-4">
+            <div className="flex items-center justify-center w-10 h-10 rounded-2xl bg-white/5 border border-white/5">
+              <MapPin className="w-4 h-4 text-white/40" />
             </div>
-            <span className="text-white font-bold text-sm truncate flex-1">{stopName}</span>
+            <div className="flex flex-col">
+               <span className="text-[10px] font-black tracking-widest text-white/20 uppercase mb-0.5">Target Stop</span>
+               <span className="text-white font-bold text-base tracking-tight">{stopName}</span>
+            </div>
           </div>
 
           {/* Bottom: Live Metrics */}
-          <div className="flex items-center gap-3">
-            <div className="text-3xl">🚌</div>
-            <div className="flex flex-col flex-1 pl-1">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-white/70 text-xs font-semibold">Arrives in</span>
-                <span className="text-white text-xl font-bold transition-all duration-500 inline-block w-auto min-w-[32px]">
-                  {etaMinutes} min
+          <div className="flex items-center gap-6 bg-brand-dark/40 p-6 rounded-[1.5rem] border border-white/5 transition-transform hover:scale-[1.02] shadow-inner">
+            <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-2xl">
+               <Bus className="w-6 h-6 text-brand-dark" />
+            </div>
+            <div className="flex flex-col flex-1">
+              <div className="flex items-baseline gap-2">
+                <span className="text-white text-2xl font-black tracking-tighter">
+                  {etaMinutes}
                 </span>
+                <span className="text-white/30 text-xs font-black uppercase tracking-widest leading-none pb-1">MINUTES</span>
               </div>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-blue-300 font-bold text-xs">{distanceKm} km</span>
-                <span className="text-white/30 text-xs">•</span>
-                <span className="text-white/50 text-xs italic truncate">via {viaRoad}</span>
+              <div className="flex items-center gap-2 mt-1.5 overflow-hidden">
+                <Navigation className="w-3 h-3 text-white/20 flex-shrink-0" />
+                <span className="text-white/40 font-bold text-[10px] uppercase tracking-widest transition-all truncate">
+                  {distanceKm}km via {viaRoad}
+                </span>
               </div>
             </div>
           </div>

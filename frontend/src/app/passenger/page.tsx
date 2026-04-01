@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import PassengerMap from "@/components/maps/PassengerMap";
 import AccountTab from "@/components/passenger/AccountTab";
 import { useRoutes } from "@/hooks/useRoutes";
+import { Map as MapIcon, User, Loader2 } from "lucide-react";
 
 type Tab = "map" | "account";
 
@@ -19,13 +20,17 @@ export default function PassengerPage() {
   }, [routes, selectedRouteId]);
 
   const activeRoute = routes.find(r => r.id === selectedRouteId);
-  const targetStop = activeRoute?.waypoints && activeRoute.waypoints.length > 0 ? {
-    id: "terminus",
-    lat: activeRoute.waypoints[activeRoute.waypoints.length - 1].lat,
-    lng: activeRoute.waypoints[activeRoute.waypoints.length - 1].lng,
-    name: "Final Destination",
-    shortName: "TERMINUS"
-  } : null;
+  
+  // Use the new dynamic 'stops' array if available, fallback to terminus logic
+  const targetStop = activeRoute?.stops && activeRoute.stops.length > 0 
+    ? activeRoute.stops[activeRoute.stops.length - 1] 
+    : (activeRoute?.waypoints && activeRoute.waypoints.length > 0 ? {
+        id: "terminus",
+        lat: activeRoute.waypoints[activeRoute.waypoints.length - 1].lat,
+        lng: activeRoute.waypoints[activeRoute.waypoints.length - 1].lng,
+        name: "Final Destination",
+        shortName: "TERMINUS"
+      } : null);
 
   return (
     <div className="flex flex-col h-screen bg-brand-dark text-white overflow-hidden">
@@ -34,28 +39,35 @@ export default function PassengerPage() {
         <div className={`absolute inset-0 z-0 ${activeTab === "map" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
           {activeRoute && targetStop ? (
             <>
-              {/* Route Selector Dashboard */}
-              <div className="absolute top-0 w-full z-40 bg-gradient-to-b from-brand-dark/95 to-transparent pt-safe px-4 pb-6">
-                 <select
-                    value={selectedRouteId}
-                    onChange={(e) => setSelectedRouteId(e.target.value)}
-                    className="w-full backdrop-blur-md bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xl appearance-none font-semibold truncate"
-                  >
-                    {routes.map((r) => (
-                      <option key={r.id} value={r.id} className="bg-brand-dark">{r.name}</option>
-                    ))}
-                  </select>
+              {/* Route Selector Dashboard - Refined Block Style */}
+              <div className="absolute top-0 w-full z-40 bg-gradient-to-b from-brand-dark/95 to-transparent pt-safe px-4 pb-12">
+                 <div className="relative w-full max-w-lg mx-auto">
+                    <select
+                      value={selectedRouteId}
+                      onChange={(e) => setSelectedRouteId(e.target.value)}
+                      className="w-full h-14 backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl px-6 text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight"
+                    >
+                      {routes.map((r) => (
+                        <option key={r.id} value={r.id} className="bg-brand-dark">{r.name}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-30">
+                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                         <path d="M6 9l6 6 6-6" />
+                       </svg>
+                    </div>
+                 </div>
               </div>
 
               <PassengerMap 
                 targetStop={targetStop} 
-                routeId={activeRoute.id} 
+                route={activeRoute} 
               />
             </>
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-brand-dark/90 px-6 text-center">
-              <div className="w-8 h-8 rounded-full border-4 border-t-blue-500 border-white/20 animate-spin mb-4" />
-              <p className="text-white/60 font-medium tracking-wide">Fetching active transit routes...</p>
+            <div className="w-full h-full flex flex-col items-center justify-center bg-brand-dark px-10 text-center">
+              <Loader2 className="w-10 h-10 text-white/20 animate-spin mb-6" />
+              <p className="text-white/40 text-sm font-bold uppercase tracking-[0.2em]">Synchronizing Network...</p>
             </div>
           )}
         </div>
@@ -66,27 +78,27 @@ export default function PassengerPage() {
         </div>
       </div>
 
-      {/* Bottom Navigation */}
-      <nav className="shrink-0 bg-brand-dark/95 border-t border-white/10 backdrop-blur-md pb-safe">
-        <div className="flex items-center justify-around px-2 py-1">
+      {/* Bottom Navigation - Deep Charcoal Block Style */}
+      <nav className="shrink-0 bg-brand-surface/80 border-t border-white/5 backdrop-blur-2xl pb-safe">
+        <div className="flex items-center justify-around px-4 py-2 max-w-md mx-auto">
           <button
             onClick={() => setActiveTab("map")}
-            className={`flex flex-col items-center justify-center p-3 flex-1 rounded-2xl transition-colors ${
-              activeTab === "map" ? "text-blue-400 bg-white/5" : "text-white/40 hover:text-white/70"
+            className={`flex flex-col items-center justify-center py-3 flex-1 rounded-2xl transition-all duration-300 ${
+              activeTab === "map" ? "text-white bg-white/5 transform scale-105" : "text-white/30 hover:text-white/60"
             }`}
           >
-            <span className="text-2xl mb-1 drop-shadow-sm">🗺️</span>
-            <span className="text-[10px] font-bold tracking-widest uppercase">Live Map</span>
+            <MapIcon className={`w-5 h-5 mb-1.5 ${activeTab === "map" ? "text-white" : "opacity-40"}`} />
+            <span className="text-[9px] font-black tracking-[0.15em] uppercase">Live Map</span>
           </button>
           
           <button
             onClick={() => setActiveTab("account")}
-            className={`flex flex-col items-center justify-center p-3 flex-1 rounded-2xl transition-colors ${
-              activeTab === "account" ? "text-emerald-400 bg-white/5" : "text-white/40 hover:text-white/70"
+            className={`flex flex-col items-center justify-center py-3 flex-1 rounded-2xl transition-all duration-300 ${
+              activeTab === "account" ? "text-white bg-white/5 transform scale-105" : "text-white/30 hover:text-white/60"
             }`}
           >
-            <span className="text-2xl mb-1 drop-shadow-sm">👤</span>
-            <span className="text-[10px] font-bold tracking-widest uppercase">Account</span>
+            <User className={`w-5 h-5 mb-1.5 ${activeTab === "account" ? "text-white" : "opacity-40"}`} />
+            <span className="text-[9px] font-black tracking-[0.15em] uppercase">Account</span>
           </button>
         </div>
       </nav>

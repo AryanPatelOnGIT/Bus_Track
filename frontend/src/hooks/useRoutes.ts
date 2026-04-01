@@ -7,11 +7,20 @@ export interface RouteWaypoint {
   lng: number;
 }
 
+export interface RouteStop {
+  id: string;
+  name: string;
+  shortName: string;
+  lat: number;
+  lng: number;
+}
+
 export interface RouteData {
   id: string;
   name: string;
-  waypoints: RouteWaypoint[];
   color: string;
+  stops: RouteStop[];
+  waypoints: RouteWaypoint[];
 }
 
 export function useRoutes() {

@@ -6,10 +6,11 @@ import { useMapsLibrary } from "@vis.gl/react-google-maps";
 interface Props {
   origin: { lat: number; lng: number } | null;
   destination: { lat: number; lng: number } | null;
+  waypoints?: { lat: number; lng: number }[];
   enabled: boolean;
 }
 
-export function useGoogleDirections({ origin, destination, enabled }: Props) {
+export function useGoogleDirections({ origin, destination, waypoints = [], enabled }: Props) {
   const routesLib = useMapsLibrary("routes");
 
   const [directionsResult, setDirectionsResult] = useState<google.maps.DirectionsResult | null>(null);
@@ -36,20 +37,28 @@ export function useGoogleDirections({ origin, destination, enabled }: Props) {
 
       try {
         const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
-          directionsServiceRef.current!.route(
-            {
-              origin: new google.maps.LatLng(origin.lat, origin.lng),
-              destination: new google.maps.LatLng(destination.lat, destination.lng),
-              travelMode: google.maps.TravelMode.DRIVING,
+          const request: google.maps.DirectionsRequest = {
+            origin: new google.maps.LatLng(origin.lat, origin.lng),
+            destination: new google.maps.LatLng(destination.lat, destination.lng),
+            travelMode: google.maps.TravelMode.DRIVING,
+            waypoints: waypoints.map(wp => ({
+              location: new google.maps.LatLng(wp.lat, wp.lng),
+              stopover: true,
+            })),
+            optimizeWaypoints: false, // Follow the provided order (the "train")
+            drivingOptions: {
+              departureTime: new Date(),
+              trafficModel: google.maps.TrafficModel.BEST_GUESS,
             },
-            (res, status) => {
-              if (status === google.maps.DirectionsStatus.OK && res) {
-                resolve(res);
-              } else {
-                reject(status);
-              }
+          };
+
+          directionsServiceRef.current!.route(request, (res, status) => {
+            if (status === google.maps.DirectionsStatus.OK && res) {
+              resolve(res);
+            } else {
+              reject(status);
             }
-          );
+          });
         });
 
         setDirectionsResult(result);
@@ -75,7 +84,13 @@ export function useGoogleDirections({ origin, destination, enabled }: Props) {
     origin?.lng,
     destination?.lat,
     destination?.lng,
+    JSON.stringify(waypoints), // Important: Depend on waypoint contents
   ]);
+
+  // Total duration and distance across all legs (stops)
+  const legs = directionsResult?.routes[0]?.legs || [];
+  const durationValue = legs.reduce((acc, leg) => acc + (leg.duration_in_traffic?.value ?? leg.duration?.value ?? 0), 0);
+  const distanceValue = legs.reduce((acc, leg) => acc + (leg.distance?.value ?? 0), 0);
 
   return {
     directionsResult,
@@ -83,6 +98,8 @@ export function useGoogleDirections({ origin, destination, enabled }: Props) {
     nextInstruction: currentStep?.instructions ?? "",
     distanceToNextTurn: currentStep?.distance?.text ?? "",
     maneuver: currentStep?.maneuver ?? "",
+    durationValue,
+    distanceValue,
     isLoading,
     error,
   };

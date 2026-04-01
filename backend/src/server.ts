@@ -53,7 +53,8 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-httpServer.listen(PORT, () => {
+// ── Reverted: Bind to localhost for internal access ────────────────────────────
+httpServer.listen(Number(PORT), () => {
   console.log(`✅ BusTrack server running on http://localhost:${PORT}`);
 });
 
