@@ -5,20 +5,13 @@ import TransmitterControls from "@/components/driver/TransmitterControls";
 import DriverNavMap from "@/components/driver/DriverNavMap";
 import { PREDEFINED_ROUTES } from "@/lib/predefinedRoutes";
 
-interface PassengerRequest {
-  requestId: string;
-  type: "pickup" | "dropoff";
-  lat: number;
-  lng: number;
-  status: "pending" | "accepted" | "completed" | "cancelled";
-}
+
 
 export default function DriverPage() {
   const [busId, setBusId] = useState("BRTS-101");
   const [selectedRouteId, setSelectedRouteId] = useState(PREDEFINED_ROUTES[0]?.id || "");
   const [isTracking, setIsTracking] = useState(false);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number; heading: number } | null>(null);
-  const [requests, setRequests] = useState<PassengerRequest[]>([]);
   
   const socketRef = useRef<ReturnType<typeof import("socket.io-client").io> | null>(null);
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
@@ -31,13 +24,7 @@ export default function DriverPage() {
       });
       socketRef.current = socket;
 
-      socket.on("request:new", (req: PassengerRequest) => {
-        // Only show requests for this bus
-        setRequests((prev) => {
-          // In real prod, this filter would be on the server or use the selected busId
-          return [...prev, req];
-        });
-      });
+
     });
 
     return () => {
@@ -79,8 +66,29 @@ export default function DriverPage() {
               status: "active",
             });
           },
-          console.error,
-          { enableHighAccuracy: true }
+          (err) => {
+            console.warn("Geolocation failed/denied. Using mock location for testing.", err);
+            // Fallback for desktop testing where GPS might be unavailable
+            const mockLoc = {
+               lat: 23.0347 + (Math.random() * 0.005 - 0.0025),
+               lng: 72.5483 + (Math.random() * 0.005 - 0.0025),
+               heading: Math.floor(Math.random() * 360)
+            };
+            
+            setDriverLocation(mockLoc);
+            
+            socketRef.current?.emit("driver:location-update", {
+              busId,
+              driverId: "drv_1",
+              lat: mockLoc.lat,
+              lng: mockLoc.lng,
+              heading: mockLoc.heading,
+              speed: 15,
+              timestamp: Date.now(),
+              status: "active",
+            });
+          },
+          { enableHighAccuracy: true, timeout: 5000 }
         );
       }
     };
@@ -90,7 +98,7 @@ export default function DriverPage() {
     
     // Set interval for 3 seconds
     intervalIdRef.current = setInterval(updateLocation, 3000);
-  }, [busId]);
+  }, [busId, selectedRouteId]);
 
   const handleStopTracking = useCallback(() => {
     setIsTracking(false);
@@ -104,10 +112,11 @@ export default function DriverPage() {
     setDriverLocation(null);
   }, [busId]);
 
-  const handleRequestDone = useCallback((requestId: string) => {
-    socketRef.current?.emit("driver:request-done", { requestId });
-    setRequests((prev) => prev.filter((r) => r.requestId !== requestId));
-  }, []);
+  const handleRouteUpdate = useCallback((routeId: string) => {
+    if (socketRef.current && busId) {
+      socketRef.current.emit("driver:route-update", { busId, routeId });
+    }
+  }, [busId]);
 
   return (
     <div className="flex flex-col h-screen bg-brand-dark text-white overflow-hidden">
@@ -122,8 +131,7 @@ export default function DriverPage() {
             isTracking={isTracking}
             onStartTracking={handleStartTracking}
             onStopTracking={handleStopTracking}
-            requests={requests}
-            onRequestDone={handleRequestDone}
+            onRouteUpdate={handleRouteUpdate}
           />
         </aside>
         
@@ -131,7 +139,6 @@ export default function DriverPage() {
         <div className="flex-1 relative z-0">
           <DriverNavMap 
             driverLocation={driverLocation} 
-            requests={requests} 
             selectedRouteId={selectedRouteId}
           />
         </div>

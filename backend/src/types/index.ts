@@ -57,6 +57,7 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
   "driver:start-tracking": (data: { busId: string; driverId: string; routeId?: string }) => void;
   "driver:location-update": (data: Omit<BusLocation, "status">) => void;
+  "driver:route-update": (data: { busId: string; routeId: string }) => void;
   "driver:stop-tracking": (data: { busId: string }) => void;
   "driver:request-done": (data: { requestId: string }) => void;
   "passenger:request": (data: Omit<PassengerRequest, "requestId" | "status" | "createdAt">) => void;

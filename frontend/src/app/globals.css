@@ -52,11 +52,6 @@ body {
   background: var(--brand-primary);
 }
 
-/* Leaflet override — keep map above body bg */
-.leaflet-container {
-  background: var(--brand-dark) !important;
-  font-family: "Inter", sans-serif !important;
-}
 
 /* Custom bus-pulse animation for active tracking */
 @keyframes busping {
