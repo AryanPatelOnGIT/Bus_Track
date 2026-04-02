@@ -7,6 +7,11 @@ import DriverProfileTab from "@/components/driver/DriverProfileTab";
 import { useRoutes } from "@/hooks/useRoutes";
 import { Navigation, User } from "lucide-react";
 
+// Mock location state — uses tiny increments instead of random jumps
+let mockLat = 23.0347;
+let mockLng = 72.5483;
+let mockHeading = 45;
+
 type Tab = "map" | "profile";
 
 export default function DriverPage() {
@@ -75,12 +80,15 @@ export default function DriverPage() {
               status: "active",
             });
           },
-          (err) => {
-            console.warn("Geolocation fallback.");
+          () => {
+            // Smooth mock drift — small incremental movement instead of random jumps
+            mockLat += (Math.random() - 0.4) * 0.0003;
+            mockLng += (Math.random() - 0.3) * 0.0004;
+            mockHeading = (mockHeading + (Math.random() - 0.5) * 15 + 360) % 360;
             const mockLoc = {
-               lat: 23.0347 + (Math.random() * 0.005 - 0.0025),
-               lng: 72.5483 + (Math.random() * 0.005 - 0.0025),
-               heading: Math.floor(Math.random() * 360)
+               lat: mockLat,
+               lng: mockLng,
+               heading: Math.round(mockHeading),
             };
             setDriverLocation(mockLoc);
             socketRef.current?.emit("driver:location-update", {
@@ -139,7 +147,7 @@ export default function DriverPage() {
             )}
           </div>
           
-          <div className="absolute bottom-0 w-full z-20">
+          <div className="absolute bottom-0 w-full z-10">
             <TransmitterControls
               busId={busId}
               setBusId={setBusId}

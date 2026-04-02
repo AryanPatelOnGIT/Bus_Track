@@ -14,7 +14,7 @@ export interface ETACardProps {
   isLoading: boolean;
 }
 
-export default function ETACard({
+const ETACard = React.memo(function ETACard({
   stopName,
   stopShortName,
   etaMinutes,
@@ -41,7 +41,7 @@ export default function ETACard({
 
   return (
     <div className="w-full max-w-sm space-y-4">
-      {/* Arrival Alert Banner - Charcoal Mono Style */}
+      {/* Arrival Alert Banner */}
       {isArriving && !hasArrived && (
         <div 
           className="bg-emerald-500/10 border border-emerald-500/20 rounded-[1.5rem] px-6 py-4 shadow-3xl flex items-center gap-4 animate-slide-up"
@@ -64,9 +64,9 @@ export default function ETACard({
         </div>
       )}
 
-      {/* Main ETA Card - Refined Block Style */}
+      {/* Main ETA Card */}
       {!hasArrived && (
-        <div className="bg-brand-surface/90 backdrop-blur-2xl border border-white/5 rounded-[2.5rem] p-8 shadow-3xl w-full flex flex-col gap-8 relative overflow-hidden">
+        <div className="bg-brand-surface/90 border border-white/5 rounded-[2.5rem] p-8 shadow-3xl w-full flex flex-col gap-8 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-[50px] pointer-events-none" />
           
           {/* Top: Location Context */}
@@ -81,7 +81,7 @@ export default function ETACard({
           </div>
 
           {/* Bottom: Live Metrics */}
-          <div className="flex items-center gap-6 bg-brand-dark/40 p-6 rounded-[1.5rem] border border-white/5 transition-transform hover:scale-[1.02] shadow-inner">
+          <div className="flex items-center gap-6 bg-brand-dark/40 p-6 rounded-[1.5rem] border border-white/5 shadow-inner">
             <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-2xl">
                <Bus className="w-6 h-6 text-brand-dark" />
             </div>
@@ -94,7 +94,7 @@ export default function ETACard({
               </div>
               <div className="flex items-center gap-2 mt-1.5 overflow-hidden">
                 <Navigation className="w-3 h-3 text-white/20 flex-shrink-0" />
-                <span className="text-white/40 font-bold text-[10px] uppercase tracking-widest transition-all truncate">
+                <span className="text-white/40 font-bold text-[10px] uppercase tracking-widest truncate">
                   {distanceKm}km via {viaRoad}
                 </span>
               </div>
@@ -104,4 +104,6 @@ export default function ETACard({
       )}
     </div>
   );
-}
+});
+
+export default ETACard;

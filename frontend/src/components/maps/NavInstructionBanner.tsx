@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import {
   ArrowUp,
   CornerUpLeft as TurnLeft,
@@ -25,11 +26,10 @@ function ManeuverIcon({ maneuver }: { maneuver: string }) {
   if (m.includes("roundabout") || m.includes("u-turn")) return <RefreshCw className={cls} />;
   if (m.includes("destination")) return <MapPin className={cls} />;
   
-  // Default straight
   return <ArrowUp className={cls} />;
 }
 
-export default function NavInstructionBanner({
+const NavInstructionBanner = React.memo(function NavInstructionBanner({
   instruction,
   distanceToTurn,
   maneuver,
@@ -42,7 +42,7 @@ export default function NavInstructionBanner({
       className="absolute top-8 left-1/2 z-[1000]"
       style={{ transform: "translateX(-50%)", width: "calc(100% - 48px)", maxWidth: 460 }}
     >
-      <div className="bg-brand-surface/90 backdrop-blur-2xl border border-white/5 rounded-[1.5rem] shadow-3xl flex items-center gap-4 px-6 py-4 relative overflow-hidden">
+      <div className="bg-brand-surface/95 border border-white/5 rounded-[1.5rem] shadow-3xl flex items-center gap-4 px-6 py-4 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-[50px] pointer-events-none" />
         
         {isRerouting ? (
@@ -79,4 +79,6 @@ export default function NavInstructionBanner({
       </div>
     </div>
   );
-}
+});
+
+export default NavInstructionBanner;

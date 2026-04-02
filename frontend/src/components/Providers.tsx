@@ -6,7 +6,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <APIProvider
       apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY as string}
-      libraries={["places", "geometry", "routes"]}
+      libraries={["places", "geometry", "routes", "marker"]}
     >
       {children}
     </APIProvider>

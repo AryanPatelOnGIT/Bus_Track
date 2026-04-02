@@ -1,6 +1,6 @@
 "use client";
 
-import { User, ClipboardList, Settings, LogOut, ChevronRight, Tool, Verified } from "lucide-react";
+import { User, ClipboardList, Settings, LogOut, ChevronRight, Wrench, BadgeCheck } from "lucide-react";
 
 interface Props {
   driverId: string;
@@ -22,7 +22,7 @@ export default function DriverProfileTab({ driverId, busId }: Props) {
               Driver {driverId.replace("drv_", "#")}
             </h2>
             <div className="flex items-center justify-center gap-2">
-               <Verified className="w-3.5 h-3.5 text-blue-500" />
+               <BadgeCheck className="w-3.5 h-3.5 text-blue-500" />
                <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Authorized Operator</p>
             </div>
           </div>

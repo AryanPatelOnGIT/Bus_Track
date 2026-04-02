@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useMapsLibrary } from "@vis.gl/react-google-maps";
 
 interface Props {
@@ -8,18 +8,45 @@ interface Props {
   destination: { lat: number; lng: number } | null;
   waypoints?: { lat: number; lng: number }[];
   enabled: boolean;
+  /** Debounce delay in ms before firing an API request. Default: 1500ms. */
+  debounceMs?: number;
+  /** Request alternative routes from the API. Default: false. */
+  provideRouteAlternatives?: boolean;
 }
 
-export function useGoogleDirections({ origin, destination, waypoints = [], enabled }: Props) {
+export interface RouteSummary {
+  index: number;
+  summary: string;       // e.g. "via University Rd"
+  duration: number;       // seconds
+  distance: number;       // meters
+  durationText: string;   // e.g. "12 min"
+  distanceText: string;   // e.g. "4.2 km"
+}
+
+/** Stable waypoint hash that doesn't create a new string every render. */
+function waypointHash(wps: { lat: number; lng: number }[]): string {
+  return wps.map(w => `${w.lat.toFixed(5)},${w.lng.toFixed(5)}`).join("|");
+}
+
+export function useGoogleDirections({
+  origin,
+  destination,
+  waypoints = [],
+  enabled,
+  debounceMs = 1500,
+  provideRouteAlternatives = false,
+}: Props) {
   const routesLib = useMapsLibrary("routes");
 
   const [directionsResult, setDirectionsResult] = useState<google.maps.DirectionsResult | null>(null);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const [currentStep, setCurrentStep] = useState<google.maps.DirectionsStep | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastKeyRef = useRef<string>("");
 
   useEffect(() => {
     if (routesLib) {
@@ -27,11 +54,21 @@ export function useGoogleDirections({ origin, destination, waypoints = [], enabl
     }
   }, [routesLib]);
 
+  // Round origin to ~111m precision so interpolation jitter doesn't trigger re-fetches
+  const originLat = origin ? Math.round(origin.lat * 1000) / 1000 : null;
+  const originLng = origin ? Math.round(origin.lng * 1000) / 1000 : null;
+
+  const waypointKey = useMemo(() => waypointHash(waypoints), [waypoints]);
+
   useEffect(() => {
     if (!enabled || !origin || !destination || !directionsServiceRef.current) return;
 
+    const cacheKey = `${originLat},${originLng}|${destination.lat.toFixed(5)},${destination.lng.toFixed(5)}|${waypointKey}|alt=${provideRouteAlternatives}`;
+    if (cacheKey === lastKeyRef.current) return;
+
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(async () => {
+      if (!directionsServiceRef.current) return;
       setIsLoading(true);
       setError(null);
 
@@ -45,7 +82,8 @@ export function useGoogleDirections({ origin, destination, waypoints = [], enabl
               location: new google.maps.LatLng(wp.lat, wp.lng),
               stopover: true,
             })),
-            optimizeWaypoints: false, // Follow the provided order (the "train")
+            optimizeWaypoints: false,
+            provideRouteAlternatives,
             drivingOptions: {
               departureTime: new Date(),
               trafficModel: google.maps.TrafficModel.BEST_GUESS,
@@ -61,9 +99,11 @@ export function useGoogleDirections({ origin, destination, waypoints = [], enabl
           });
         });
 
+        lastKeyRef.current = cacheKey;
         setDirectionsResult(result);
+        // Reset selected route when new results arrive
+        setSelectedRouteIndex(0);
 
-        // Derive current step
         if (result.routes[0]?.legs[0]?.steps?.length > 0) {
           setCurrentStep(result.routes[0].legs[0].steps[0]);
         }
@@ -73,27 +113,85 @@ export function useGoogleDirections({ origin, destination, waypoints = [], enabl
       } finally {
         setIsLoading(false);
       }
-    }, 800);
+    }, debounceMs);
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [
     enabled,
-    origin?.lat,
-    origin?.lng,
+    originLat,
+    originLng,
     destination?.lat,
     destination?.lng,
-    JSON.stringify(waypoints), // Important: Depend on waypoint contents
+    waypointKey,
+    debounceMs,
+    provideRouteAlternatives,
   ]);
 
-  // Total duration and distance across all legs (stops)
-  const legs = directionsResult?.routes[0]?.legs || [];
-  const durationValue = legs.reduce((acc, leg) => acc + (leg.duration_in_traffic?.value ?? leg.duration?.value ?? 0), 0);
-  const distanceValue = legs.reduce((acc, leg) => acc + (leg.distance?.value ?? 0), 0);
+  // ── All routes array ──
+  const allRoutes = directionsResult?.routes || [];
+
+  // ── Route summaries for each alternative ──
+  const routeSummaries: RouteSummary[] = useMemo(() => {
+    return allRoutes.map((route, index) => {
+      const legs = route.legs || [];
+      const totalDuration = legs.reduce(
+        (acc, leg) => acc + (leg.duration_in_traffic?.value ?? leg.duration?.value ?? 0),
+        0
+      );
+      const totalDistance = legs.reduce(
+        (acc, leg) => acc + (leg.distance?.value ?? 0),
+        0
+      );
+
+      const mins = Math.ceil(totalDuration / 60);
+      const durationText = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} hr ${mins % 60} min`;
+      const distKm = totalDistance / 1000;
+      const distanceText = distKm < 1 ? `${totalDistance} m` : `${distKm.toFixed(1)} km`;
+
+      return {
+        index,
+        summary: route.summary || `Route ${index + 1}`,
+        duration: totalDuration,
+        distance: totalDistance,
+        durationText,
+        distanceText,
+      };
+    });
+  }, [allRoutes]);
+
+  // ── Selected route data ──
+  const selectedRoute = allRoutes[selectedRouteIndex] || allRoutes[0];
+  const legs = selectedRoute?.legs || [];
+  const durationValue = legs.reduce(
+    (acc, leg) => acc + (leg.duration_in_traffic?.value ?? leg.duration?.value ?? 0),
+    0
+  );
+  const distanceValue = legs.reduce(
+    (acc, leg) => acc + (leg.distance?.value ?? 0),
+    0
+  );
+
+  // Update currentStep when selection changes
+  useEffect(() => {
+    if (selectedRoute?.legs?.[0]?.steps?.length > 0) {
+      setCurrentStep(selectedRoute.legs[0].steps[0]);
+    }
+  }, [selectedRouteIndex, selectedRoute]);
+
+  const selectRoute = useCallback((idx: number) => {
+    if (idx >= 0 && idx < allRoutes.length) {
+      setSelectedRouteIndex(idx);
+    }
+  }, [allRoutes.length]);
 
   return {
     directionsResult,
+    allRoutes,
+    routeSummaries,
+    selectedRouteIndex,
+    selectRoute,
     currentStep,
     nextInstruction: currentStep?.instructions ?? "",
     distanceToNextTurn: currentStep?.distance?.text ?? "",

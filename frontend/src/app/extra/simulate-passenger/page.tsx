@@ -14,7 +14,7 @@ export default function SimulatePassengerPage() {
       <div className="relative flex-1">
         <PassengerMap 
           targetStop={BRTS_ROUTES[0].stops[1]} 
-          routeId={BRTS_ROUTES[0].id} 
+          route={BRTS_ROUTES[0] as any} 
         />
       </div>
     </div>
