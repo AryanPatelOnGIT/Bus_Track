@@ -59,6 +59,7 @@ function FleetMapOverviewInner() {
   }, []);
 
   const [predefinedRoute, setPredefinedRoute] = useState<google.maps.LatLngLiteral[]>([]);
+  const [activeRoutePolyline, setActiveRoutePolyline] = useState<string>("");
   const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
   const [selectedBusId, setSelectedBusId] = useState<string | null>(null);
   const [routeResult, setRouteResult] = useState<any>(null);
@@ -74,9 +75,11 @@ function FleetMapOverviewInner() {
       const route = routes.find(r => r.id === newRouteId);
       if (route) {
          setPredefinedRoute(route.waypoints.map(w => ({ lat: w.lat, lng: w.lng })));
+         setActiveRoutePolyline(route.polyline || "");
       }
     } else if (!newRouteId && predefinedRoute.length > 0) {
       setPredefinedRoute([]);
+      setActiveRoutePolyline("");
       setActiveRouteId(null);
     }
   }, [buses, selectedBusId, activeRouteId, routes, predefinedRoute.length]);
@@ -95,7 +98,8 @@ function FleetMapOverviewInner() {
         {/* Dynamic Route Line */}
         {predefinedRoute.length > 0 && (
            <DirectionsRoute 
-             waypoints={predefinedRoute} 
+             waypoints={predefinedRoute}
+             encodedPolyline={activeRoutePolyline}
              onRouteResultV2={(res) => setRouteResult(res)}
            />
         )}

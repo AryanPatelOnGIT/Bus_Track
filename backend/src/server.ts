@@ -17,6 +17,7 @@ import cors from "cors";
 import { Server as SocketServer } from "socket.io";
 import { trackingGateway } from "./sockets/trackingGateway";
 import { registerBusLocationHandlers } from "./socket/busLocationHandler";
+import { preloadRoutePolylines } from "./lib/etaService";
 import busRoutes from "./routes/buses";
 import analyticsRoutes from "./routes/analytics";
 import requestRoutes from "./routes/requests";
@@ -53,9 +54,13 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// ── Reverted: Bind to localhost for internal access ────────────────────────────
-httpServer.listen(Number(PORT), () => {
-  console.log(`✅ BusTrack server running on http://localhost:${PORT}`);
+// ── Start Server ──────────────────────────────────────────────────────────────
+httpServer.listen(Number(PORT), "0.0.0.0", () => {
+  console.log(`✅ BusTrack backend running on port ${PORT} (0.0.0.0)`);
+  // Pre-load route polylines from Firestore into memory for zero-cost serving
+  preloadRoutePolylines().catch((err) =>
+    console.error("Failed to preload polylines:", err)
+  );
 });
 
 export { io };

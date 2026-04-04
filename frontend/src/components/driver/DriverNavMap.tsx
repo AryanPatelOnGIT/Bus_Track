@@ -37,6 +37,7 @@ function TrafficLayer() {
 function DriverNavMapInner({ driverLocation, selectedRouteId }: Props) {
   const { routes } = useRoutes();
   const [assignedPath, setAssignedPath] = useState<google.maps.LatLngLiteral[]>([]);
+  const [assignedPolyline, setAssignedPolyline] = useState<string>("");
   const [routeResult, setRouteResult] = useState<google.maps.DirectionsResult | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
@@ -46,9 +47,11 @@ function DriverNavMapInner({ driverLocation, selectedRouteId }: Props) {
       const route = routes.find((r) => r.id === selectedRouteId);
       if (route && route.waypoints.length >= 2) {
         setAssignedPath(route.waypoints.map(w => ({ lat: w.lat, lng: w.lng })));
+        setAssignedPolyline(route.polyline || "");
       }
     } else {
       setAssignedPath([]);
+      setAssignedPolyline("");
       setRouteResult(null);
     }
   }, [selectedRouteId, routes]);
@@ -75,7 +78,8 @@ function DriverNavMapInner({ driverLocation, selectedRouteId }: Props) {
         {/* Dynamic Route Rendering via Google Maps Directions API */}
         {assignedPath.length > 0 && (
             <DirectionsRoute 
-              waypoints={assignedPath} 
+              waypoints={assignedPath}
+              encodedPolyline={assignedPolyline}
               onRouteResultV2={(res) => setRouteResult(res)}
             />
         )}

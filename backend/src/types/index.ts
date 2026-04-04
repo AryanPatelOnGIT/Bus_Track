@@ -48,6 +48,17 @@ export interface FleetStats {
 
 // ── Simulation Bus Location (additive — does not replace existing events) ──────
 
+export interface ETAUpdate {
+  busId: string;
+  routeId: string;
+  etaSeconds: number;
+  etaMinutes: number;
+  distanceMeters: number;
+  distanceKm: string;
+  polyline: string;
+  timestamp: number;
+}
+
 export interface SimBusLocation {
   busId: string;
   lat: number;
@@ -61,6 +72,7 @@ export interface ServerToClientEvents {
   "bus:location-update": (data: BusLocation) => void;
   "bus:location": (data: SimBusLocation) => void;
   "bus:stop-tracking": (data: { busId: string }) => void;
+  "bus:eta-update": (data: ETAUpdate) => void;
   "request:new": (req: PassengerRequest) => void;
   "request:updated": (req: PassengerRequest) => void;
   "fleet:stats": (stats: FleetStats) => void;

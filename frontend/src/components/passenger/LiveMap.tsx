@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap } from "@vis.gl/react-google-maps";
 import { DirectionsRoute } from "@/components/DirectionsRoute";
 import { useRoutes } from "@/hooks/useRoutes";
-import { useThrottledDirections } from "@/hooks/useThrottledDirections";
 import BusIcon from "@/components/shared/BusIcon";
 import DirectionsPanel from "@/components/shared/DirectionsPanel";
 import { Bus, Wifi, WifiOff, Map as MapIcon, Loader2 } from "lucide-react";
@@ -47,8 +46,6 @@ function LiveMapInner({ onMapClick, selectedPin }: LiveMapProps) {
   const destination = useMemo(() => {
     return selectedPin ? { lat: selectedPin.lat, lng: selectedPin.lng } : null;
   }, [selectedPin]);
-  
-  const { cachedRoute, updateRoute } = useThrottledDirections(destination);
 
   useEffect(() => {
     import("socket.io-client").then(({ io }) => {
@@ -76,14 +73,8 @@ function LiveMapInner({ onMapClick, selectedPin }: LiveMapProps) {
     return () => { socketRef.current?.disconnect(); };
   }, []);
 
-  useEffect(() => {
-    const activeBus = Array.from(buses.values()).find(b => b.status === "active");
-    if (activeBus && destination) {
-       updateRoute({ lat: activeBus.lat, lng: activeBus.lng });
-    }
-  }, [buses, destination, updateRoute]);
-
   const [predefinedRoute, setPredefinedRoute] = useState<google.maps.LatLngLiteral[]>([]);
+  const [activeRoutePolyline, setActiveRoutePolyline] = useState<string>("");
   const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -96,9 +87,11 @@ function LiveMapInner({ onMapClick, selectedPin }: LiveMapProps) {
       if (route) {
         const coords = route.waypoints.map(w => ({ lat: w.lat, lng: w.lng }));
         setPredefinedRoute(coords);
+        setActiveRoutePolyline(route.polyline || "");
       }
     } else if (!newRouteId && predefinedRoute.length > 0) {
       setPredefinedRoute([]);
+      setActiveRoutePolyline("");
       setActiveRouteId(null);
     }
   }, [buses, activeRouteId, routes, predefinedRoute.length]);
@@ -119,7 +112,7 @@ function LiveMapInner({ onMapClick, selectedPin }: LiveMapProps) {
         <TrafficLayerActivator />
 
         {predefinedRoute.length > 0 && (
-          <DirectionsRoute waypoints={predefinedRoute} />
+          <DirectionsRoute waypoints={predefinedRoute} encodedPolyline={activeRoutePolyline} />
         )}
 
         {Array.from(buses.values()).map(bus => (
@@ -136,7 +129,7 @@ function LiveMapInner({ onMapClick, selectedPin }: LiveMapProps) {
       </GoogleMap>
 
       <DirectionsPanel 
-        result={cachedRoute} 
+        result={null} 
         isOpen={isPanelOpen} 
         onToggle={() => setIsPanelOpen(!isPanelOpen)} 
       />

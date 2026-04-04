@@ -21,6 +21,12 @@ export interface RouteData {
   color: string;
   stops: RouteStop[];
   waypoints: RouteWaypoint[];
+  /** Pre-computed encoded polyline from Google Maps (stored in Firestore during seed) */
+  polyline?: string;
+  /** Pre-computed route distance in meters */
+  distanceMeters?: number;
+  /** Pre-computed route duration string e.g. "600s" */
+  duration?: string;
 }
 
 export function useRoutes() {

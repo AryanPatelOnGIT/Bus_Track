@@ -28,6 +28,39 @@ function waypointHash(wps: { lat: number; lng: number }[]): string {
   return wps.map(w => `${w.lat.toFixed(5)},${w.lng.toFixed(5)}`).join("|");
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  GLOBAL IN-MEMORY CACHE — survives component re-mounts
+//  Prevents redundant API calls when switching tabs or re-rendering
+// ═══════════════════════════════════════════════════════════════════
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+interface CachedResult {
+  result: google.maps.DirectionsResult;
+  timestamp: number;
+}
+
+const directionsCache = new Map<string, CachedResult>();
+
+function getCached(key: string): google.maps.DirectionsResult | null {
+  const entry = directionsCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    directionsCache.delete(key);
+    return null;
+  }
+  return entry.result;
+}
+
+function setCache(key: string, result: google.maps.DirectionsResult): void {
+  directionsCache.set(key, { result, timestamp: Date.now() });
+  // Evict oldest entries if cache grows too large
+  if (directionsCache.size > 50) {
+    const firstKey = directionsCache.keys().next().value;
+    if (firstKey) directionsCache.delete(firstKey);
+  }
+}
+
 export function useGoogleDirections({
   origin,
   destination,
@@ -69,6 +102,19 @@ export function useGoogleDirections({
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(async () => {
       if (!directionsServiceRef.current) return;
+
+      // Check global cache first — avoid API call entirely
+      const cached = getCached(cacheKey);
+      if (cached) {
+        lastKeyRef.current = cacheKey;
+        setDirectionsResult(cached);
+        setSelectedRouteIndex(0);
+        if (cached.routes[0]?.legs[0]?.steps?.length > 0) {
+          setCurrentStep(cached.routes[0].legs[0].steps[0]);
+        }
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
 
@@ -100,6 +146,7 @@ export function useGoogleDirections({
         });
 
         lastKeyRef.current = cacheKey;
+        setCache(cacheKey, result); // Store in global cache
         setDirectionsResult(result);
         // Reset selected route when new results arrive
         setSelectedRouteIndex(0);

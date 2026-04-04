@@ -7,6 +7,12 @@ import type {
   PassengerRequest,
 } from "../types";
 import { db } from "../lib/firebaseAdmin";
+import {
+  startETATracking,
+  stopETATracking,
+  getLastETA,
+  getAllETAs,
+} from "../lib/etaService";
 
 // Initial data for tracking system
 export const activeBuses = new Map<string, BusLocation>();
@@ -34,10 +40,14 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
       for (const bus of activeBuses.values()) {
         socket.emit("bus:location-update", bus);
       }
+      // Send cached ETAs so passengers don't need to call Google Maps
+      for (const eta of getAllETAs()) {
+        socket.emit("bus:eta-update", eta);
+      }
     });
 
     // ── Driver ──────────────────────────────────────────────────────────────
-    socket.on("driver:start-tracking", ({ busId, driverId, routeId }) => {
+    socket.on("driver:start-tracking", async ({ busId, driverId, routeId }) => {
       socket.join(`bus:${busId}`);
       if (routeId) {
         busMetadata.set(busId, { routeId });
@@ -56,6 +66,33 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
       for (const req of pendingRequests.values()) {
         if (req.busId === busId) {
           socket.emit("request:new", req);
+        }
+      }
+
+      // ── Start server-side ETA tracking ──
+      // Fetch the route's last stop as destination from Firestore
+      if (routeId) {
+        try {
+          const routeDoc = await db.collection("routes").doc(routeId).get();
+          const routeData = routeDoc.data();
+          if (routeData && routeData.waypoints && routeData.waypoints.length >= 2) {
+            const lastWp = routeData.waypoints[routeData.waypoints.length - 1];
+            const destination = { lat: lastWp.lat, lng: lastWp.lng };
+
+            startETATracking(
+              io as any,
+              busId,
+              routeId,
+              () => {
+                const bus = activeBuses.get(busId);
+                return bus ? { lat: bus.lat, lng: bus.lng } : null;
+              },
+              () => destination,
+              30_000 // 30 second interval
+            );
+          }
+        } catch (err) {
+          console.error(`❌ Failed to start ETA tracking for bus ${busId}:`, err);
         }
       }
     });
@@ -124,6 +161,7 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
     socket.on("driver:stop-tracking", ({ busId }) => {
       activeBuses.delete(busId);
       busMetadata.delete(busId);
+      stopETATracking(busId);
       io.to("admin").emit("bus:stop-tracking", { busId });
       io.to("passengers").emit("bus:stop-tracking", { busId });
     });

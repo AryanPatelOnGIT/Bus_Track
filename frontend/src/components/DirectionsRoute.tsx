@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { useMap, useMapsLibrary, AdvancedMarker } from "@vis.gl/react-google-maps";
-import { computeRouteV2 } from "@/lib/googleMapsRoutes";
 
 interface DirectionsRouteProps {
   waypoints: google.maps.LatLngLiteral[];
+  /** Pre-computed encoded polyline from Firestore — if provided, NO API call is made */
+  encodedPolyline?: string;
   showMarkers?: boolean;
   onRouteResultV2?: (result: any) => void;
 }
 
-export function DirectionsRoute({ waypoints, showMarkers = true, onRouteResultV2 }: DirectionsRouteProps) {
+export function DirectionsRoute({ waypoints, encodedPolyline, showMarkers = true, onRouteResultV2 }: DirectionsRouteProps) {
   const map = useMap();
   const geometryLib = useMapsLibrary("geometry");
   const [polyline, setPolyline] = useState<google.maps.Polyline | null>(null);
@@ -29,41 +30,49 @@ export function DirectionsRoute({ waypoints, showMarkers = true, onRouteResultV2
     return () => pl.setMap(null);
   }, [map]);
 
-  // Compute Route V2
+  // Display route — use pre-computed polyline if available, otherwise fallback to waypoints
   useEffect(() => {
-    if (!polyline || !geometryLib || waypoints.length < 2) return;
+    if (!polyline || !geometryLib) return;
 
-    const origin = waypoints[0];
-    const destination = waypoints[waypoints.length - 1];
-    const intermediates = waypoints.slice(1, -1);
-
-    const fetchRoute = async () => {
+    // PRIORITY 1: Use the pre-computed encoded polyline (ZERO API cost)
+    if (encodedPolyline) {
       try {
-        const result = await computeRouteV2({
-          origin,
-          destination,
-          intermediates,
-        });
+        const decodedPath = geometryLib.encoding.decodePath(encodedPolyline);
+        polyline.setOptions({ strokeOpacity: 0.8, icons: [] });
+        polyline.setPath(decodedPath);
 
-        if (result.routes && result.routes[0]) {
-          const route = result.routes[0];
-          const encodedPolyline = route.polyline.encodedPolyline;
-          const decodedPath = geometryLib.encoding.decodePath(encodedPolyline);
-          
-          // Switch to solid line on success
-          polyline.setOptions({ strokeOpacity: 0.8, icons: [] });
-          polyline.setPath(decodedPath);
-          
-          if (onRouteResultV2) onRouteResultV2(result);
+        if (onRouteResultV2) {
+          // Provide a synthetic result for backward compatibility
+          onRouteResultV2({
+            routes: [{
+              polyline: { encodedPolyline },
+              distanceMeters: 0,
+              duration: "0s",
+            }]
+          });
         }
+        return;
       } catch (err) {
-        console.error("Routes API v2 failed - no path will be shown:", err);
-        if (polyline) polyline.setPath([]);
+        console.warn("Failed to decode pre-computed polyline, falling back:", err);
       }
-    };
+    }
 
-    fetchRoute();
-  }, [polyline, geometryLib, waypoints, onRouteResultV2]);
+    // PRIORITY 2: Fallback — draw straight lines between waypoints (no API call)
+    if (waypoints.length >= 2) {
+      polyline.setOptions({ strokeOpacity: 0.5, icons: [] });
+      polyline.setPath(waypoints);
+
+      if (onRouteResultV2) {
+        onRouteResultV2({
+          routes: [{
+            polyline: { encodedPolyline: "" },
+            distanceMeters: 0,
+            duration: "0s",
+          }]
+        });
+      }
+    }
+  }, [polyline, geometryLib, waypoints, encodedPolyline, onRouteResultV2]);
 
   return (
     <>

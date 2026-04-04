@@ -10,7 +10,6 @@ import {
 import ETACard from "@/components/maps/ETACard";
 import { RouteStop, RouteData } from "@/hooks/useRoutes";
 import { interpolatePosition, getDistanceMeters } from "@/lib/mapUtils";
-import { useGoogleDirections } from "@/hooks/useGoogleDirections";
 import React from "react";
 
 export interface PassengerMapProps {
@@ -29,10 +28,19 @@ interface IncomingBusData {
   status: "active" | "maintenance" | "idle";
 }
 
-const INTERPOLATION_MS = 1600;
+/** ETA update from server (replaces per-client Google Maps calls) */
+interface ETAUpdatePayload {
+  busId: string;
+  routeId: string;
+  etaSeconds: number;
+  etaMinutes: number;
+  distanceMeters: number;
+  distanceKm: string;
+  polyline: string;
+  timestamp: number;
+}
 
-/** Only repaint React state at ~10fps — bus icon updates happen imperatively. */
-const DIRECTIONS_UPDATE_THRESHOLD_M = 80;
+const INTERPOLATION_MS = 1600;
 
 const RIPPLE_KEYFRAMES = `
   @keyframes ripple {
@@ -66,6 +74,7 @@ function createBusMarkerContent(status: string): HTMLDivElement {
 function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
   const map = useMap();
   const markerLib = useMapsLibrary("marker");
+  const geometryLib = useMapsLibrary("geometry");
   const socketRef = useRef<ReturnType<typeof import("socket.io-client").io> | null>(null);
 
   // Raw bus data — written by socket, read by RAF loop. Never triggers React state.
@@ -79,52 +88,17 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
   const busMarkersRef = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
   const busMarkerContentsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // For directions — only update origin when bus moves significantly
-  const directionsOriginRef = useRef<{ lat: number; lng: number } | null>(null);
-  const [directionsOrigin, setDirectionsOrigin] = useState<{ lat: number; lng: number } | null>(null);
-
-  // ETA display state — only changes when directions result changes
+  // ETA display state — fed by server socket, NOT by Google Maps calls
   const [liveEtaMinutes, setLiveEtaMinutes] = useState<number>(0);
   const [liveDistKm, setLiveDistKm] = useState<string>("—");
 
   // Track whether any bus exists (for the ETA card loading state)
   const [hasBus, setHasBus] = useState(false);
 
-  /**
-   * 1. FULL ROUTE ROAD-SNAP — fires once when route loads, result is cached.
-   */
-  const fullRouteWaypoints = useMemo(() => {
-    if (!route.stops || route.stops.length < 3) return [];
-    return route.stops.slice(1, -1).map(s => ({ lat: s.lat, lng: s.lng }));
-  }, [route.stops]);
+  // ══════════════════════════════════════════════════════════════════
+  //  1. STATIC ROUTE POLYLINE — from Firestore, ZERO API calls
+  // ══════════════════════════════════════════════════════════════════
 
-  const { directionsResult: fullRouteResult } = useGoogleDirections({
-    origin: route.stops ? { lat: route.stops[0].lat, lng: route.stops[0].lng } : null,
-    destination: route.stops ? { lat: route.stops[route.stops.length - 1].lat, lng: route.stops[route.stops.length - 1].lng } : null,
-    waypoints: fullRouteWaypoints,
-    enabled: !!route.stops && route.stops.length >= 2,
-    debounceMs: 1000,
-  });
-
-  /**
-   * 2. LIVE SEGMENT SNAP — uses metered origin so it's nicely throttled.
-   */
-  const activeWaypoints = useMemo(() => {
-    if (!route.stops) return [];
-    const targetIndex = route.stops.findIndex(s => s.id === targetStop.id);
-    if (targetIndex === -1) return [];
-    return route.stops.filter((_, idx) => idx < targetIndex).map(s => ({ lat: s.lat, lng: s.lng }));
-  }, [route.stops, targetStop.id]);
-
-  const { directionsResult: activeResult, durationValue, distanceValue } = useGoogleDirections({
-    origin: directionsOrigin,
-    destination: { lat: targetStop.lat, lng: targetStop.lng },
-    waypoints: activeWaypoints,
-    enabled: !!directionsOrigin,
-    debounceMs: 2000,
-  });
-
-  // ── Polyline drawing — imperative ──
   const fullPolyRef = useRef<google.maps.Polyline | null>(null);
   const activePolyRef = useRef<google.maps.Polyline | null>(null);
 
@@ -150,19 +124,27 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
     };
   }, [map]);
 
+  // Decode and display the pre-computed polyline from Firestore
   useEffect(() => {
-    if (fullPolyRef.current && fullRouteResult) {
-      fullPolyRef.current.setPath(fullRouteResult.routes[0]?.overview_path || []);
+    if (!fullPolyRef.current || !geometryLib || !route.polyline) return;
+    try {
+      const decoded = geometryLib.encoding.decodePath(route.polyline);
+      fullPolyRef.current.setPath(decoded);
+    } catch (err) {
+      console.warn("Failed to decode route polyline from Firestore:", err);
+      // Fallback: use waypoints as straight-line path
+      if (route.waypoints?.length > 0) {
+        fullPolyRef.current.setPath(
+          route.waypoints.map(w => ({ lat: w.lat, lng: w.lng }))
+        );
+      }
     }
-  }, [fullRouteResult]);
+  }, [geometryLib, route.polyline, route.waypoints]);
 
-  useEffect(() => {
-    if (activePolyRef.current && activeResult) {
-      activePolyRef.current.setPath(activeResult.routes[0]?.overview_path || []);
-    }
-  }, [activeResult]);
+  // ══════════════════════════════════════════════════════════════════
+  //  2. SOCKET CONNECTION — receives bus positions + server-side ETAs
+  // ══════════════════════════════════════════════════════════════════
 
-  // ── Socket connection ──
   useEffect(() => {
     let mounted = true;
     import("socket.io-client").then(({ io }) => {
@@ -177,9 +159,28 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
         socket.emit("passenger:join");
       });
 
+      // Bus location updates (for marker positioning)
       socket.on("bus:location-update", (payload: IncomingBusData) => {
         if (payload.routeId === route.id) {
           rawBusesRef.current.set(payload.busId, payload);
+        }
+      });
+
+      // Server-side ETA updates — NO Google Maps API call on the client!
+      socket.on("bus:eta-update", (payload: ETAUpdatePayload) => {
+        if (payload.routeId === route.id) {
+          setLiveEtaMinutes(payload.etaMinutes);
+          setLiveDistKm(payload.distanceKm);
+
+          // Optionally update the active segment polyline from server
+          if (payload.polyline && activePolyRef.current && geometryLib) {
+            try {
+              const decoded = geometryLib.encoding.decodePath(payload.polyline);
+              activePolyRef.current.setPath(decoded);
+            } catch {
+              // Ignore decode errors for active segment
+            }
+          }
         }
       });
     });
@@ -192,10 +193,13 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
       }
       cancelAnimationFrame(frameRef.current);
     };
-  }, [route.id]);
+  }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── IMPERATIVE animation loop — updates Google Maps markers directly, no React ──
-  // Store the AdvancedMarkerElement class ref for use inside RAF
+  // ══════════════════════════════════════════════════════════════════
+  //  3. IMPERATIVE ANIMATION LOOP — updates Google Maps markers
+  //     directly, no React re-renders, no API calls
+  // ══════════════════════════════════════════════════════════════════
+
   const MarkerClassRef = useRef<typeof google.maps.marker.AdvancedMarkerElement | null>(null);
   useEffect(() => {
     if (markerLib) {
@@ -205,8 +209,6 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
 
   useEffect(() => {
     if (!map || !markerLib) return;
-
-    let lastDirectionsCheck = 0;
 
     const animate = () => {
       frameRef.current = requestAnimationFrame(animate);
@@ -260,24 +262,9 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
           }
         }
 
-        // Throttle directions origin update — check every 500ms of wall-clock time
-        if (now - lastDirectionsCheck > 500) {
-          lastDirectionsCheck = now;
-          const newPos = { lat: displayLat, lng: displayLng };
-          if (!directionsOriginRef.current) {
-            directionsOriginRef.current = newPos;
-            setDirectionsOrigin(newPos);
-            setHasBus(true);
-          } else {
-            const dist = getDistanceMeters(directionsOriginRef.current, newPos);
-            if (dist > DIRECTIONS_UPDATE_THRESHOLD_M) {
-              directionsOriginRef.current = newPos;
-              setDirectionsOrigin(newPos);
-            }
-          }
-          if (!hasBus) {
-            setHasBus(true);
-          }
+        // Mark that we have a bus
+        if (!hasBus) {
+          setHasBus(true);
         }
       });
 
@@ -300,14 +287,6 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
       busMarkerContentsRef.current.clear();
     };
   }, [map, markerLib]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Update ETA display
-  useEffect(() => {
-    if (activeResult) {
-      setLiveEtaMinutes(Math.ceil(durationValue / 60));
-      setLiveDistKm((distanceValue / 1000).toFixed(1));
-    }
-  }, [activeResult, durationValue, distanceValue]);
 
   return (
     <>

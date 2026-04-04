@@ -31,7 +31,7 @@ const RIPPLE_KEYFRAMES = `
     100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
   }
 `;
-const ACTIVE_ROUTE_THRESHOLD_M = 100;
+const ACTIVE_ROUTE_THRESHOLD_M = 500;  // Increased from 100m to reduce API calls
 
 // ── Route colors (Google Maps style) ──
 const SELECTED_ROUTE_COLOR = "#4285F4";      // Google blue
@@ -105,7 +105,7 @@ function DriverMapInner({ route, targetStop, driverLocation, socketRef, busId }:
     destination: { lat: targetStop.lat, lng: targetStop.lng },
     waypoints: [],       // No waypoints → enables alternatives
     enabled: navPhase === "preview",
-    debounceMs: 500,
+    debounceMs: 3000,    // Increased from 500ms to reduce API calls
     provideRouteAlternatives: true,
   });
 
@@ -113,19 +113,9 @@ function DriverMapInner({ route, targetStop, driverLocation, socketRef, busId }:
   //  NAVIGATING MODE — uses the active segment with waypoints
   // ═══════════════════════════════════════════════════════════════════
 
-  // Full route polyline (fires once, cached)
-  const fullRouteWaypoints = useMemo(() => {
-    if (!route.stops || route.stops.length < 3) return [];
-    return route.stops.slice(1, -1).map(s => ({ lat: s.lat, lng: s.lng }));
-  }, [route.stops]);
-
-  const { directionsResult: fullRouteResult } = useGoogleDirections({
-    origin: route.stops ? { lat: route.stops[0].lat, lng: route.stops[0].lng } : null,
-    destination: route.stops ? { lat: route.stops[route.stops.length - 1].lat, lng: route.stops[route.stops.length - 1].lng } : null,
-    waypoints: fullRouteWaypoints,
-    enabled: navPhase === "navigating" && !!route.stops && route.stops.length >= 2,
-    debounceMs: 1000,
-  });
+  // Full route polyline — from Firestore cache, ZERO API calls
+  // The polyline was pre-computed during seed.ts and stored in Firestore.
+  const geometryLib = useMapsLibrary("geometry");
 
   // Live segment — metered origin
   const activeOriginRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -162,7 +152,7 @@ function DriverMapInner({ route, targetStop, driverLocation, socketRef, busId }:
     destination: { lat: targetStop.lat, lng: targetStop.lng },
     waypoints: activeWaypoints,
     enabled: navPhase === "navigating" && directionsEnabled,
-    debounceMs: 2000,
+    debounceMs: 5000,    // Increased from 2000ms to reduce API calls
   });
 
   useEffect(() => {
@@ -280,11 +270,23 @@ function DriverMapInner({ route, targetStop, driverLocation, socketRef, busId }:
     };
   }, [map, navPhase]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Decode and display the pre-computed polyline from Firestore (ZERO API calls)
   useEffect(() => {
-    if (fullPolyRef.current && fullRouteResult) {
-      fullPolyRef.current.setPath(fullRouteResult.routes[0]?.overview_path || []);
+    if (!fullPolyRef.current || !geometryLib) return;
+    if (route.polyline) {
+      try {
+        const decoded = geometryLib.encoding.decodePath(route.polyline);
+        fullPolyRef.current.setPath(decoded);
+      } catch {
+        // Fallback: use waypoints as straight-line path
+        if (route.waypoints?.length > 0) {
+          fullPolyRef.current.setPath(route.waypoints.map(w => ({ lat: w.lat, lng: w.lng })));
+        }
+      }
+    } else if (route.waypoints?.length > 0) {
+      fullPolyRef.current.setPath(route.waypoints.map(w => ({ lat: w.lat, lng: w.lng })));
     }
-  }, [fullRouteResult]);
+  }, [geometryLib, route.polyline, route.waypoints]);
 
   useEffect(() => {
     if (activePolyRef.current && activeResult) {
