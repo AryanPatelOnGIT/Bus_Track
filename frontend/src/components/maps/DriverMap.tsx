@@ -105,7 +105,7 @@ function DriverMapInner({ route, targetStop, driverLocation, socketRef, busId }:
     destination: { lat: targetStop.lat, lng: targetStop.lng },
     waypoints: [],       // No waypoints → enables alternatives
     enabled: navPhase === "preview",
-    debounceMs: 3000,    // Increased from 500ms to reduce API calls
+    debounceMs: 8000,    // 8s debounce to cut API calls during early movement
     provideRouteAlternatives: true,
   });
 
@@ -142,6 +142,9 @@ function DriverMapInner({ route, targetStop, driverLocation, socketRef, busId }:
     return (route.stops || []).filter((_, idx) => idx < targetIndex).map(s => ({ lat: s.lat, lng: s.lng }));
   }, [route.stops, targetStop.id]);
 
+  // Navigation mode: use server-side ETA from socket + pre-computed Firestore polyline.
+  // Directions API is NOT called during navigation to save cost.
+  // The full route polyline is already in `route.polyline` (decoded below).
   const {
     directionsResult: activeResult,
     durationValue, distanceValue,
@@ -151,8 +154,8 @@ function DriverMapInner({ route, targetStop, driverLocation, socketRef, busId }:
     origin: activeOrigin || (route.stops?.length ? { lat: route.stops[0].lat, lng: route.stops[0].lng } : null),
     destination: { lat: targetStop.lat, lng: targetStop.lng },
     waypoints: activeWaypoints,
-    enabled: navPhase === "navigating" && directionsEnabled,
-    debounceMs: 5000,    // Increased from 2000ms to reduce API calls
+    enabled: false, // DISABLED: use Firestore polyline + server ETA instead
+    debounceMs: 10000,
   });
 
   useEffect(() => {

@@ -23,16 +23,8 @@ function Recenter({ location }: { location: { lat: number, lng: number } }) {
   return null;
 }
 
-function TrafficLayer() {
-  const map = useMap();
-  useEffect(() => {
-    if (!map) return;
-    const trafficLayer = new google.maps.TrafficLayer();
-    trafficLayer.setMap(map);
-    return () => trafficLayer.setMap(null);
-  }, [map]);
-  return null;
-}
+// TrafficLayer removed to reduce Dynamic Maps billing.
+// Full navigation uses DriverMap.tsx which retains traffic context.
 
 function DriverNavMapInner({ driverLocation, selectedRouteId }: Props) {
   const { routes } = useRoutes();
@@ -64,8 +56,7 @@ function DriverNavMapInner({ driverLocation, selectedRouteId }: Props) {
         disableDefaultUI={true}
         mapId="b1b1b1b1b1b1b1b1"
       >
-        <TrafficLayer />
-        
+
         {driverLocation && <Recenter location={driverLocation} />}
 
         {/* Driver Location */}

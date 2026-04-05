@@ -20,16 +20,8 @@ interface BusLocation {
   routeId?: string;
 }
 
-function TrafficLayer() {
-  const map = useMap();
-  useEffect(() => {
-    if (!map) return;
-    const trafficLayer = new google.maps.TrafficLayer();
-    trafficLayer.setMap(map);
-    return () => trafficLayer.setMap(null);
-  }, [map]);
-  return null;
-}
+// TrafficLayer removed to reduce Dynamic Maps billing.
+// Admin fleet overview uses socket data, not live traffic visualization.
 
 function FleetMapOverviewInner() {
   const { routes } = useRoutes();
@@ -93,8 +85,7 @@ function FleetMapOverviewInner() {
         mapId="d1d1d1d1d1d1d1"
         onClick={() => setSelectedBusId(null)}
       >
-        <TrafficLayer />
-        
+
         {/* Dynamic Route Line */}
         {predefinedRoute.length > 0 && (
            <DirectionsRoute 

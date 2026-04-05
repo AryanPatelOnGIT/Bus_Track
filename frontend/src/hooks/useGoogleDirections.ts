@@ -33,7 +33,7 @@ function waypointHash(wps: { lat: number; lng: number }[]): string {
 //  Prevents redundant API calls when switching tabs or re-rendering
 // ═══════════════════════════════════════════════════════════════════
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes (was 5 min)
 
 interface CachedResult {
   result: google.maps.DirectionsResult;
@@ -66,7 +66,7 @@ export function useGoogleDirections({
   destination,
   waypoints = [],
   enabled,
-  debounceMs = 1500,
+  debounceMs = 5000,  // Increased default: fewer API calls
   provideRouteAlternatives = false,
 }: Props) {
   const routesLib = useMapsLibrary("routes");
@@ -130,10 +130,9 @@ export function useGoogleDirections({
             })),
             optimizeWaypoints: false,
             provideRouteAlternatives,
-            drivingOptions: {
-              departureTime: new Date(),
-              trafficModel: google.maps.TrafficModel.BEST_GUESS,
-            },
+            // NOTE: drivingOptions/trafficModel intentionally omitted.
+            // Adding it upgrades billing to "Advanced" tier (more expensive).
+            // Server-side ETA via socket already handles live traffic ETA.
           };
 
           directionsServiceRef.current!.route(request, (res, status) => {

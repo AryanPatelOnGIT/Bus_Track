@@ -25,16 +25,8 @@ interface LiveMapProps {
   selectedPin?: { lat: number; lng: number } | null;
 }
 
-function TrafficLayerActivator() {
-  const map = useMap();
-  useEffect(() => {
-    if (!map) return;
-    const trafficLayer = new google.maps.TrafficLayer();
-    trafficLayer.setMap(map);
-    return () => trafficLayer.setMap(null);
-  }, [map]);
-  return null;
-}
+// TrafficLayer removed to reduce Dynamic Maps billing.
+// Passengers track buses via real-time socket — traffic overlay not needed.
 
 function LiveMapInner({ onMapClick, selectedPin }: LiveMapProps) {
   const { routes } = useRoutes();
@@ -109,7 +101,6 @@ function LiveMapInner({ onMapClick, selectedPin }: LiveMapProps) {
            }
         }}
       >
-        <TrafficLayerActivator />
 
         {predefinedRoute.length > 0 && (
           <DirectionsRoute waypoints={predefinedRoute} encodedPolyline={activeRoutePolyline} />

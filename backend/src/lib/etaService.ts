@@ -45,6 +45,12 @@ function haversineMeters(a: LatLng, b: LatLng): number {
 const etaIntervals = new Map<string, NodeJS.Timeout>();
 const lastETAResults = new Map<string, ETAUpdate>();
 
+// ── Last bus location at ETA computation time (for distance throttling) ──
+const lastETALocation = new Map<string, LatLng>();
+
+// ── Minimum distance bus must move before re-computing ETA (500m) ──
+const MIN_MOVEMENT_METERS = 500;
+
 // ── Route polyline cache (from Firestore — computed once during seed) ──
 const routePolylineCache = new Map<string, string>();
 
@@ -169,6 +175,7 @@ async function computeETAFromAPI(
 /**
  * Starts periodic ETA computation for a bus.
  * Computes once immediately, then every INTERVAL_MS.
+ * Skips API call if bus hasn't moved more than MIN_MOVEMENT_METERS.
  */
 export function startETATracking(
   io: Server,
@@ -176,15 +183,25 @@ export function startETATracking(
   routeId: string,
   getLocation: () => LatLng | null,
   getDestination: () => LatLng | null,
-  intervalMs: number = 30_000
+  intervalMs: number = 180_000 // Default: 3 minutes (was 30s)
 ): void {
   // Clear any existing interval for this bus
   stopETATracking(busId);
 
-  const compute = async () => {
+  const compute = async (forceCompute = false) => {
     const loc = getLocation();
     const dest = getDestination();
     if (!loc || !dest) return;
+
+    // ── Distance-based skip: don't call API if bus hasn't moved enough ──
+    const lastLoc = lastETALocation.get(busId);
+    if (!forceCompute && lastLoc) {
+      const moved = haversineMeters(lastLoc, loc);
+      if (moved < MIN_MOVEMENT_METERS) {
+        console.log(`⏭️  ETA skip for bus ${busId}: only moved ${Math.round(moved)}m (< ${MIN_MOVEMENT_METERS}m threshold)`);
+        return;
+      }
+    }
 
     const result = await computeETAFromAPI(loc, dest);
     const etaMinutes = Math.max(1, Math.ceil(result.etaSeconds / 60));
@@ -202,6 +219,7 @@ export function startETATracking(
     };
 
     lastETAResults.set(busId, update);
+    lastETALocation.set(busId, loc); // Record location at time of API call
 
     // Broadcast to all passengers
     io.to("passengers").emit("bus:eta-update" as any, update);
@@ -213,15 +231,15 @@ export function startETATracking(
     );
   };
 
-  // Compute immediately
-  compute();
+  // Compute immediately (forced — first load always calls API)
+  compute(true);
 
-  // Then on interval
-  const interval = setInterval(compute, intervalMs);
+  // Then on interval (subject to distance threshold)
+  const interval = setInterval(() => compute(false), intervalMs);
   etaIntervals.set(busId, interval);
 
   console.log(
-    `🚀 ETA tracking started for bus ${busId} (every ${intervalMs / 1000}s)`
+    `🚀 ETA tracking started for bus ${busId} (every ${intervalMs / 1000}s, min movement: ${MIN_MOVEMENT_METERS}m)`
   );
 }
 
@@ -234,6 +252,7 @@ export function stopETATracking(busId: string): void {
     clearInterval(existing);
     etaIntervals.delete(busId);
     lastETAResults.delete(busId);
+    lastETALocation.delete(busId); // Clear location reference
     console.log(`🛑 ETA tracking stopped for bus ${busId}`);
   }
 }
