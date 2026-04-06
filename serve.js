@@ -3,7 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 const port = 8080;
-const root = 'c:\\Users\\Naman Sinha\\Desktop\\BusTracker';
+// Use __dirname instead of a hardcoded absolute path so this works on any machine
+const root = path.resolve(__dirname);
 
 const mimeTypes = {
     '.html': 'text/html',
@@ -11,7 +12,8 @@ const mimeTypes = {
     '.css': 'text/css',
     '.json': 'application/json',
     '.png': 'image/png',
-    '.jpg': 'image/jpg',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
     '.gif': 'image/gif',
     '.svg': 'image/svg+xml',
     '.wav': 'audio/wav',
@@ -21,12 +23,20 @@ const mimeTypes = {
     '.eot': 'application/vnd.ms-fontobject',
     '.otf': 'application/font-otf',
     '.wasm': 'application/wasm',
-    '.jpeg': 'image/jpeg'
 };
 
 http.createServer((req, res) => {
-    let url = req.url.split('?')[0];
-    let filePath = path.join(root, url === '/' ? 'prototype.html' : url);
+    const urlPath = req.url.split('?')[0];
+    // Resolve the target path and verify it stays within root (prevents path traversal)
+    const filePath = path.resolve(root, urlPath === '/' ? 'prototype.html' : urlPath.slice(1));
+
+    // ── Path traversal guard ──────────────────────────────────────────────────
+    if (!filePath.startsWith(root)) {
+        res.writeHead(403);
+        res.end('403 Forbidden');
+        return;
+    }
+
     const extname = String(path.extname(filePath)).toLowerCase();
     const contentType = mimeTypes[extname] || 'application/octet-stream';
 
@@ -34,10 +44,11 @@ http.createServer((req, res) => {
         if (error) {
             if (error.code === 'ENOENT') {
                 res.writeHead(404);
-                res.end('404 Not Found: ' + filePath);
+                // Do NOT leak internal filesystem paths in error responses
+                res.end('404 Not Found');
             } else {
                 res.writeHead(500);
-                res.end('500 Internal Server Error: ' + error.code);
+                res.end('500 Internal Server Error');
             }
         } else {
             res.writeHead(200, { 'Content-Type': contentType });

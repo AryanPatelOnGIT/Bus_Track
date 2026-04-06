@@ -2,8 +2,8 @@
  * BusTrack Backend - Main Server Entry Point
  *
  * Responsibilities:
- * - Initialize Express app with middleware (CORS, JSON, dotenv) - Ref: Architecture Plan
- * - Create HTTP server and attach Socket.io - Ref: PRD Sec 1, 2, 3 (Real-time sync)
+ * - Initialize Express app with middleware (CORS, JSON, Helmet, rate-limit, dotenv)
+ * - Create HTTP server and attach Socket.io
  * - Mount REST API route groups (/api/buses, /api/analytics, /api/requests)
  * - Initialize the tracking Socket.io gateway
  * - Start the server and listen on PORT from .env
@@ -14,13 +14,15 @@ import "dotenv/config";
 import express from "express";
 import http from "http";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { Server as SocketServer } from "socket.io";
 import { trackingGateway } from "./sockets/trackingGateway";
-import { registerBusLocationHandlers } from "./socket/busLocationHandler";
 import { preloadRoutePolylines } from "./lib/etaService";
 import busRoutes from "./routes/buses";
 import analyticsRoutes from "./routes/analytics";
 import requestRoutes from "./routes/requests";
+import polylineRoutes from "./routes/polyline";
 
 const PORT = process.env.PORT || 4000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
@@ -28,26 +30,51 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3000";
 const app = express();
 const httpServer = http.createServer(app);
 
-// ── Middleware ────────────────────────────────────────────────────────────────
+// ── Security Middleware ───────────────────────────────────────────────────────
+// Helmet sets safe HTTP headers (X-Content-Type-Options, X-Frame-Options, etc.)
+app.use(helmet({
+  // Disable CSP here — Socket.io and Google Maps require specific policies
+  // that should be configured in the reverse proxy / CDN instead
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
+
+// Global HTTP rate limiter — prevents DoS on all REST endpoints
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1 minute window
+  max: 200,             // Max 200 requests per IP per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please slow down." },
+});
+app.use(globalLimiter);
+
+// Tighter limit for write-heavy mutation endpoints
+const writeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Write rate limit exceeded." },
+});
+
+// ── CORS ──────────────────────────────────────────────────────────────────────
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: "16kb" })); // Prevent request body size attacks
 
 // ── REST Routes ───────────────────────────────────────────────────────────────
-// TODO: Implement full route logic in respective route files
-app.use("/api/buses", busRoutes);         // Fleet data & driver status - Ref: PRD Sec 2, 3
-app.use("/api/analytics", analyticsRoutes); // Aggregate stats for admin - Ref: PRD Sec 3
-app.use("/api/requests", requestRoutes);   // Passenger pickup/dropoff - Ref: PRD Sec 1
+app.use("/api/buses", busRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/requests", writeLimiter, requestRoutes);
+app.use("/api/routes", writeLimiter, polylineRoutes);
 
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 const io = new SocketServer(httpServer, {
   cors: { origin: CORS_ORIGIN, methods: ["GET", "POST"] },
 });
-trackingGateway(io); // Delegate all real-time events to gateway - Ref: PRD Sec 1, 2, 3
 
-// ── Additive: bus:location simulation handler ─────────────────────────────────
-io.on("connection", (socket) => {
-  registerBusLocationHandlers(io, socket);
-});
+// All socket logic is consolidated in trackingGateway — no duplicate listeners
+trackingGateway(io);
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {

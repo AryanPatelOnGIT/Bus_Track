@@ -231,11 +231,19 @@ export function startETATracking(
     );
   };
 
-  // Compute immediately (forced — first load always calls API)
-  compute(true);
+  // Compute immediately ONLY if we already have a valid location
+  // (guards against calling the Routes API on null coords at bus start)
+  const initialLoc = getLocation();
+  if (initialLoc) {
+    compute(true);
+  } else {
+    console.log(`⏳ ETA deferred for bus ${busId}: location not yet available`);
+  }
 
+  // Add jitter (±15s) so buses starting together don't fire in lockstep
+  const jitter = Math.floor(Math.random() * 30_000) - 15_000;
   // Then on interval (subject to distance threshold)
-  const interval = setInterval(() => compute(false), intervalMs);
+  const interval = setInterval(() => compute(false), intervalMs + jitter);
   etaIntervals.set(busId, interval);
 
   console.log(

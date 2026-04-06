@@ -58,6 +58,7 @@ export default function RouteManagementPanel() {
   const [newWaypoints, setNewWaypoints] = useState<RouteWaypoint[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [polylineBakeError, setPolylineBakeError] = useState<string | null>(null);
   const map = useMap();
 
   const handlePlaceSelect = (place: google.maps.places.PlaceResult) => {
@@ -105,28 +106,71 @@ export default function RouteManagementPanel() {
     }
     
     setIsSaving(true);
+    setPolylineBakeError(null);
+
+    // ── Step 1: Bake polyline via backend (server-side Routes API call) ──
+    // If this fails, we still save the route but warn the admin — it will
+    // render as a straight-line fallback until manually re-baked.
+    const waypointsForBake = newWaypoints.length > 0
+      ? newWaypoints
+      : newStops.map(s => ({ lat: s.lat, lng: s.lng }));
+
+    let bakedPolyline: string | undefined;
+    try {
+      // ── Call the Next.js server-side proxy (/api/compute-polyline) ──
+      // The proxy attaches the admin secret server-side. The secret is NEVER
+      // sent to the browser or embedded in the client JS bundle.
+      const polyRes = await fetch(`/api/compute-polyline`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ waypoints: waypointsForBake }),
+      });
+
+      if (!polyRes.ok) {
+        const errData = await polyRes.json().catch(() => ({})) as Record<string, string>;
+        throw new Error(errData.error || `HTTP ${polyRes.status}`);
+      }
+
+      const polyData = await polyRes.json() as { polyline: string };
+      bakedPolyline = polyData.polyline;
+    } catch (err) {
+      // Non-fatal — warn the admin clearly. Route saves, but shows as straight-line.
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      console.warn("⚠️ Polyline bake failed:", msg);
+      setPolylineBakeError(
+        `⚠️ Polyline bake failed (${msg}). Route saved with straight-line fallback. Re-bake it via the seed script.`
+      );
+    }
+
+    // ── Step 2: Save to Firestore (always, even if polyline bake failed) ──
     try {
       const routeData: RouteData = {
         id: newRouteId,
         name: newRouteName,
         stops: newStops,
-        waypoints: newWaypoints.length > 0 ? newWaypoints : newStops.map(s => ({ lat: s.lat, lng: s.lng })),
-        color: "#3b82f6" 
+        waypoints: waypointsForBake,
+        color: "#3b82f6",
+        ...(bakedPolyline ? { polyline: bakedPolyline } : {}),
       };
       
       await setDoc(doc(db, "routes", newRouteId), routeData);
       
       setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
+      setTimeout(() => setShowSuccess(false), 5000);
       
-      setIsCreating(false);
-      setNewRouteId("");
-      setNewRouteName("");
-      setNewStops([]);
-      setNewWaypoints([]);
+      // Only reset form if polyline bake also succeeded
+      if (bakedPolyline) {
+        setIsCreating(false);
+        setNewRouteId("");
+        setNewRouteName("");
+        setNewStops([]);
+        setNewWaypoints([]);
+      }
     } catch (err) {
       console.error("Error saving route:", err);
-      alert("Failed to save route.");
+      alert("Failed to save route to Firestore.");
     } finally {
       setIsSaving(false);
     }
@@ -228,9 +272,13 @@ export default function RouteManagementPanel() {
                   <button 
                     onClick={handleSaveRoute} 
                     disabled={isSaving || newStops.length < 2}
-                    className="h-12 px-8 rounded-2xl bg-white text-brand-dark font-black transition disabled:opacity-20 shadow-2xl text-xs uppercase tracking-[0.15em]"
+                    className="h-12 px-8 rounded-2xl bg-white text-brand-dark font-black transition disabled:opacity-20 disabled:cursor-not-allowed shadow-2xl text-xs uppercase tracking-[0.15em] flex items-center gap-2"
                   >
-                    {isSaving ? "Saving..." : "Deploy Route"}
+                    {isSaving ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Baking...</>
+                    ) : (
+                      "Deploy Route"
+                    )}
                   </button>
                   <button 
                     onClick={() => setIsCreating(false)}
@@ -253,6 +301,20 @@ export default function RouteManagementPanel() {
             {showSuccess && (
               <div className="absolute top-40 left-1/2 -translate-x-1/2 z-[100] bg-white text-brand-dark px-10 py-4 rounded-[2rem] shadow-3xl font-black uppercase tracking-widest animate-bounce flex items-center gap-3">
                  <CheckCircle className="w-5 h-5" /> Operation Success
+              </div>
+            )}
+
+            {/* Polyline bake warning — sits below success toast to avoid overlap */}
+            {polylineBakeError && (
+              <div className="absolute top-56 left-1/2 -translate-x-1/2 z-[100] bg-amber-500 text-white px-8 py-3 rounded-[2rem] shadow-3xl font-bold text-xs uppercase tracking-widest flex items-center gap-3 max-w-lg text-center">
+                {polylineBakeError}
+                <button
+                  onClick={() => setPolylineBakeError(null)}
+                  className="ml-2 text-white/70 hover:text-white transition-colors shrink-0"
+                  aria-label="Dismiss warning"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             )}
 

@@ -59,6 +59,13 @@ export function DirectionsRoute({ waypoints, encodedPolyline, showMarkers = true
 
     // PRIORITY 2: Fallback — draw straight lines between waypoints (no API call)
     if (waypoints.length >= 2) {
+      // DEV WARNING: This route has no baked polyline in Firestore.
+      // It will render as a straight line, which may look wrong on curves.
+      // Run the seed script or save via admin panel to bake a proper polyline.
+      console.warn(
+        "[DirectionsRoute] encodedPolyline missing — falling back to straight-line. " +
+        "Bake a polyline for this route via the admin panel or seed script."
+      );
       polyline.setOptions({ strokeOpacity: 0.5, icons: [] });
       polyline.setPath(waypoints);
 

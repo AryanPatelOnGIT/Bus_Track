@@ -31,6 +31,10 @@ COPY --from=builder /app/package*.json ./
 ENV NODE_ENV=production
 ENV PORT=8080
 
+# Run as non-root user for security (principle of least privilege)
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+USER nodejs
+
 EXPOSE 8080
 
 # Run the app

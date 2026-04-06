@@ -169,11 +169,15 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
       // Server-side ETA updates — NO Google Maps API call on the client!
       socket.on("bus:eta-update", (payload: ETAUpdatePayload) => {
         if (payload.routeId === route.id) {
-          setLiveEtaMinutes(payload.etaMinutes);
-          setLiveDistKm(payload.distanceKm);
+          // Null-guard: socket payloads can arrive malformed
+          const etaMin = typeof payload?.etaMinutes === "number" ? payload.etaMinutes : 0;
+          const distKm = typeof payload?.distanceKm === "string" ? payload.distanceKm : "—";
+
+          setLiveEtaMinutes(etaMin);
+          setLiveDistKm(distKm);
 
           // Optionally update the active segment polyline from server
-          if (payload.polyline && activePolyRef.current && geometryLib) {
+          if (payload?.polyline && activePolyRef.current && geometryLib) {
             try {
               const decoded = geometryLib.encoding.decodePath(payload.polyline);
               activePolyRef.current.setPath(decoded);
