@@ -12,14 +12,65 @@ export default function PassengerPage() {
   const [activeTab, setActiveTab] = useState<Tab>("map");
   const { routes } = useRoutes();
   const [selectedRouteId, setSelectedRouteId] = useState("");
+  const [activeBuses, setActiveBuses] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
-    if (routes.length > 0 && !selectedRouteId) {
-      setSelectedRouteId(routes[0].id);
-    }
-  }, [routes, selectedRouteId]);
+    let mounted = true;
+    let socket: any;
 
-  const activeRoute = routes.find(r => r.id === selectedRouteId);
+    import("socket.io-client").then(({ io }) => {
+      if (!mounted) return;
+      socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000", {
+        transports: ["websocket"],
+      });
+
+      socket.on("connect", () => {
+        socket.emit("passenger:join");
+      });
+
+      socket.on("bus:location-update", (payload: any) => {
+        if (payload.routeId && payload.busId) {
+          setActiveBuses((prev) => {
+            const next = new Map(prev);
+            next.set(payload.busId, payload.routeId);
+            return next;
+          });
+        }
+      });
+
+      socket.on("bus:stop-tracking", (payload: any) => {
+        if (payload.busId) {
+          setActiveBuses((prev) => {
+            const next = new Map(prev);
+            next.delete(payload.busId);
+            return next;
+          });
+        }
+      });
+    });
+
+    return () => {
+      mounted = false;
+      if (socket) socket.disconnect();
+    };
+  }, []);
+
+  const activeRouteIds = Array.from(new Set(activeBuses.values()));
+  const activeRouteIdsStr = activeRouteIds.sort().join(',');
+
+  useEffect(() => {
+    const currentAvailable = routes.filter(r => activeRouteIds.includes(r.id));
+    if (currentAvailable.length > 0) {
+      if (!selectedRouteId || !currentAvailable.some(r => r.id === selectedRouteId)) {
+        setSelectedRouteId(currentAvailable[0].id);
+      }
+    } else if (currentAvailable.length === 0 && selectedRouteId) {
+      setSelectedRouteId("");
+    }
+  }, [activeRouteIdsStr, routes, selectedRouteId]);
+
+  const availableRoutes = routes.filter(r => activeRouteIds.includes(r.id));
+  const activeRoute = availableRoutes.find(r => r.id === selectedRouteId);
   
   // Use the new dynamic 'stops' array if available, fallback to terminus logic
   const targetStop = activeRoute?.stops && activeRoute.stops.length > 0 
@@ -47,7 +98,7 @@ export default function PassengerPage() {
                       onChange={(e) => setSelectedRouteId(e.target.value)}
                       className="w-full h-14 backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl px-6 text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight"
                     >
-                      {routes.map((r) => (
+                      {availableRoutes.map((r) => (
                         <option key={r.id} value={r.id} className="bg-brand-dark">{r.name}</option>
                       ))}
                     </select>
@@ -67,7 +118,7 @@ export default function PassengerPage() {
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center bg-brand-dark px-10 text-center">
               <Loader2 className="w-10 h-10 text-white/20 animate-spin mb-6" />
-              <p className="text-white/40 text-sm font-bold uppercase tracking-[0.2em]">Synchronizing Network...</p>
+              <p className="text-white/40 text-sm font-bold uppercase tracking-[0.2em]">Waiting for Operator...</p>
             </div>
           )}
         </div>

@@ -22,15 +22,15 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == uid;
     }
 
-    // ── Routes collection — read by all authenticated, write by admins only ──
+    // ── Routes collection — PUBLIC read, write by admins only ──
     match /routes/{routeId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    // ── Bus locations — read by all authenticated, write by drivers/admins ──
+    // ── Bus locations — PUBLIC read, write by drivers/admins ──
     match /bus_locations/{busId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isDriver();
     }
 
