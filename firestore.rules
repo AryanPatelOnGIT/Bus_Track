@@ -22,6 +22,16 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == uid;
     }
 
+    // ── User Profiles — Store User Data & Roles ──
+    match /users/{uid} {
+      // Users can read their own profile
+      allow read: if isOwner(uid);
+      // New users can only insert themselves as a 'passenger'
+      allow create: if isOwner(uid) && request.resource.data.role == 'passenger';
+      // Nobody can update/delete their own role (Forces Admin to do it manually in backend)
+      allow update, delete: if false;
+    }
+
     // ── Routes collection — PUBLIC read, write by admins only ──
     match /routes/{routeId} {
       allow read: if true;

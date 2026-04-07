@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, googleProvider, storage, rtdb } from "@/lib/firebase";
+import { auth, googleProvider, storage, rtdb, db } from "@/lib/firebase";
 import { signInWithPopup, onAuthStateChanged, User, signOut } from "firebase/auth";
-import { ref, get, set } from "firebase/database";
+import { ref, set } from "firebase/database";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ref as storageRef, uploadString } from "firebase/storage";
 
 export type UserRole = "passenger" | "driver" | "admin" | null;
@@ -24,30 +25,38 @@ export function useAuth() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const userDbRef = ref(rtdb, `users/${firebaseUser.uid}`);
-          const userSnapshot = await get(userDbRef);
+          // 1. SOURCE OF TRUTH: FIRESTORE
+          const userDocRef = doc(db, "users", firebaseUser.uid);
+          const userSnapshot = await getDoc(userDocRef);
           
           let role: UserRole = "passenger";
 
           if (userSnapshot.exists()) {
-            role = userSnapshot.val().role as UserRole;
+            role = userSnapshot.data().role as UserRole;
           } else {
-            // First time login - Force user to be passenger. Admin status must be manually granted in Firebase DB.
+            // First time login - Force user to be passenger
             role = "passenger";
             
-            // Create user RTDB document with safe string fallbacks
+            const userData = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || "",
+              displayName: firebaseUser.displayName || "Unknown User",
+              photoURL: firebaseUser.photoURL || "",
+              role,
+              createdAt: Date.now()
+            };
+
             try {
-              await set(userDbRef, {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email || "",
-                displayName: firebaseUser.displayName || "Unknown User",
-                photoURL: firebaseUser.photoURL || "",
-                role,
-                createdAt: Date.now()
-              });
-              console.log("Successfully recorded user in Firebase Realtime Database!");
+              // Write to Firestore (Source of truth for Roles & Admin Panel)
+              await setDoc(userDocRef, userData);
+              
+              // Write to RTDB (For live quick-access if needed alongside activeBuses)
+              const userDbRef = ref(rtdb, `users/${firebaseUser.uid}`);
+              await set(userDbRef, userData);
+              
+              console.log("Successfully recorded user in Firestore and RTDB!");
             } catch (dbErr) {
-              console.error("CRITICAL ERROR: Failed to write user to Realtime Database. Check database.rules.json or your network.", dbErr);
+              console.error("CRITICAL ERROR: Failed to write user. Check rules...", dbErr);
             }
           }
 
