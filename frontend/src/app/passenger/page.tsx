@@ -20,7 +20,7 @@ export default function PassengerPage() {
 
     import("socket.io-client").then(({ io }) => {
       if (!mounted) return;
-      socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000", {
+      socket = io(process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000", {
         transports: ["websocket"],
       });
 
@@ -81,7 +81,13 @@ export default function PassengerPage() {
         lng: activeRoute.waypoints[activeRoute.waypoints.length - 1].lng,
         name: "Final Destination",
         shortName: "TERMINUS"
-      } : null);
+      } : {
+        id: "live-endpoint",
+        lat: 23.0347,
+        lng: 72.5483,
+        name: "Tracking Area",
+        shortName: "LIVE"
+      });
 
   return (
     <div className="flex flex-col h-screen bg-brand-dark text-white overflow-hidden">

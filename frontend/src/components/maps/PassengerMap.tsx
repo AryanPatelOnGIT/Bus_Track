@@ -150,7 +150,7 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
     import("socket.io-client").then(({ io }) => {
       if (!mounted) return;
       const socket = io(
-        process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000",
+        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000",
         { transports: ["websocket"] }
       );
       socketRef.current = socket;
