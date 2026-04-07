@@ -21,6 +21,12 @@ export function useAuth() {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Safety net: force loading to false if Firebase auth takes too long (e.g. offline)
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 8000);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -83,32 +89,35 @@ export function useAuth() {
             photoURL: firebaseUser.photoURL,
             role,
           });
+          
+          // CRITICAL: Unblock the UI immediately now that we have the user and role.
+          setLoading(false);
 
-          // 💾 BACKUP TO FIREBASE STORAGE
-          try {
-            const credentialFileRef = storageRef(storage, `users/${firebaseUser.uid}/credential.json`);
-            const credentialData = JSON.stringify({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              role,
-              lastLogin: Date.now()
-            }, null, 2);
-            await uploadString(credentialFileRef, credentialData, 'raw', {
-              contentType: 'application/json'
-            });
-          } catch (storageErr) {
+          // 💾 BACKUP TO FIREBASE STORAGE (Run entirely in background without awaiting)
+          const credentialFileRef = storageRef(storage, `users/${firebaseUser.uid}/credential.json`);
+          const credentialData = JSON.stringify({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            role,
+            lastLogin: Date.now()
+          }, null, 2);
+          
+          uploadString(credentialFileRef, credentialData, 'raw', {
+            contentType: 'application/json'
+          }).catch((storageErr) => {
             console.error("Failed to backup to storage:", storageErr);
-          }
+          });
 
         } catch (err) {
           console.error("Error in auth state handler:", err);
           setUser(null);
+          setLoading(false);
         }
       } else {
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
