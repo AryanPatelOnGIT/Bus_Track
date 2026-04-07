@@ -35,15 +35,20 @@ export function useAuth() {
             // First time login - Force user to be passenger. Admin status must be manually granted in Firebase DB.
             role = "passenger";
             
-            // Create user RTDB document
-            await set(userDbRef, {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              role,
-              createdAt: Date.now()
-            });
+            // Create user RTDB document with safe string fallbacks
+            try {
+              await set(userDbRef, {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || "",
+                displayName: firebaseUser.displayName || "Unknown User",
+                photoURL: firebaseUser.photoURL || "",
+                role,
+                createdAt: Date.now()
+              });
+              console.log("Successfully recorded user in Firebase Realtime Database!");
+            } catch (dbErr) {
+              console.error("CRITICAL ERROR: Failed to write user to Realtime Database. Check database.rules.json or your network.", dbErr);
+            }
           }
 
           setUser({
