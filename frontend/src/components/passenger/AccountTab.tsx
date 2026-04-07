@@ -26,17 +26,24 @@ export default function AccountTab() {
               </div>
             ) : user ? (
               <>
-                <h2 className="text-3xl font-bold font-display tracking-tight text-white mb-2" style={{ fontFamily: "Outfit, sans-serif" }}>
-                  {user.displayName || "Passenger"}
+                <h2 className="text-3xl font-bold font-display tracking-tight text-white mb-1" style={{ fontFamily: "Outfit, sans-serif" }}>
+                  {user.displayName || "Anonymous User"}
                 </h2>
-                <p className="text-xs font-bold text-white/20 uppercase tracking-[0.2em]">{user.role}</p>
+                <div className="flex flex-col items-center gap-1">
+                  <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">Account Role</p>
+                  <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-blue-400 uppercase tracking-widest">
+                    {user.role || "Passenger"}
+                  </span>
+                </div>
               </>
             ) : (
               <>
-                <h2 className="text-3xl font-bold font-display tracking-tight text-white mb-2" style={{ fontFamily: "Outfit, sans-serif" }}>
+                <h2 className="text-3xl font-bold font-display tracking-tight text-white mb-1" style={{ fontFamily: "Outfit, sans-serif" }}>
                   Guest Rider
                 </h2>
-                <p className="text-xs font-bold text-white/20 uppercase tracking-[0.2em]">Unverified</p>
+                <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                  Unverified
+                </span>
               </>
             )}
           </div>
