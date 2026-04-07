@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, googleProvider, db, storage } from "@/lib/firebase";
+import { auth, googleProvider, storage, rtdb } from "@/lib/firebase";
 import { signInWithPopup, onAuthStateChanged, User, signOut } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { ref, get, set } from "firebase/database";
 import { ref as storageRef, uploadString } from "firebase/storage";
 
 export type UserRole = "passenger" | "driver" | "admin" | null;
@@ -24,20 +24,19 @@ export function useAuth() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const userDocRef = doc(db, "users", firebaseUser.uid);
-          const userDoc = await getDoc(userDocRef);
+          const userDbRef = ref(rtdb, `users/${firebaseUser.uid}`);
+          const userSnapshot = await get(userDbRef);
           
           let role: UserRole = "passenger";
 
-          if (userDoc.exists()) {
-            role = userDoc.data().role as UserRole;
+          if (userSnapshot.exists()) {
+            role = userSnapshot.val().role as UserRole;
           } else {
-            // First time login - Check if this is the root admin email
-            const isAdmin = process.env.NEXT_PUBLIC_ADMIN_EMAIL && firebaseUser.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-            role = isAdmin ? "admin" : "passenger";
+            // First time login - Force user to be passenger. Admin status must be manually granted in Firebase DB.
+            role = "passenger";
             
-            // Create user document
-            await setDoc(userDocRef, {
+            // Create user RTDB document
+            await set(userDbRef, {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               displayName: firebaseUser.displayName,
