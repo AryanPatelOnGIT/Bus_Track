@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, googleProvider, db } from "@/lib/firebase";
+import { auth, googleProvider, db, storage } from "@/lib/firebase";
 import { signInWithPopup, onAuthStateChanged, User, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { ref as storageRef, uploadString } from "firebase/storage";
 
 export type UserRole = "passenger" | "driver" | "admin" | null;
 
@@ -53,6 +54,26 @@ export function useAuth() {
             photoURL: firebaseUser.photoURL,
             role,
           });
+
+          // 💾 BACKUP TO FIREBASE STORAGE
+          // Store a copy of the user "credentials" as a JSON file in Storage
+          try {
+            const credentialFileRef = storageRef(storage, `users/${firebaseUser.uid}/credential.json`);
+            const credentialData = JSON.stringify({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+              role,
+              lastLogin: Date.now()
+            }, null, 2);
+            await uploadString(credentialFileRef, credentialData, 'raw', {
+              contentType: 'application/json'
+            });
+            console.log("Credentials stored in Firebase Storage.");
+          } catch (storageErr) {
+            console.error("Failed to backup to storage:", storageErr);
+          }
+
         } catch (err) {
           console.error("Error fetching user role:", err);
           setUser(null);
