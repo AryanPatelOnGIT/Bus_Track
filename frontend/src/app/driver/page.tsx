@@ -6,6 +6,8 @@ import DriverMap from "@/components/maps/DriverMap";
 import DriverProfileTab from "@/components/driver/DriverProfileTab";
 import { useRoutes } from "@/hooks/useRoutes";
 import { Navigation, User } from "lucide-react";
+import { rtdb } from "@/lib/firebase";
+import { ref, set, remove } from "firebase/database";
 
 // Mock location state — uses tiny increments instead of random jumps
 let mockLat = 23.0347;
@@ -48,13 +50,31 @@ export default function DriverPage() {
   }, []);
 
   const handleStartTracking = useCallback(() => {
-    if (!busId || !socketRef.current) return;
+    if (!busId) return;
     setIsTracking(true);
-    socketRef.current.emit("driver:start-tracking", { 
-      busId, 
-      driverId: "drv_1", 
-      routeId: selectedRouteId 
+
+    // Tell the backend socket (if available) that tracking started
+    socketRef.current?.emit("driver:start-tracking", {
+      busId,
+      driverId: "drv_1",
+      routeId: selectedRouteId
     });
+
+    const writeToFirebase = (loc: { lat: number; lng: number; heading: number; speed: number }) => {
+      // Write directly to Firebase Realtime Database — works on any phone, no backend needed
+      const busRef = ref(rtdb, `activeBuses/${busId}`);
+      set(busRef, {
+        busId,
+        driverId: "drv_1",
+        routeId: selectedRouteId,
+        lat: loc.lat,
+        lng: loc.lng,
+        heading: loc.heading,
+        speed: loc.speed,
+        status: "active",
+        timestamp: Date.now(),
+      }).catch(console.error);
+    };
 
     const updateLocation = () => {
       if ("geolocation" in navigator) {
@@ -65,41 +85,28 @@ export default function DriverPage() {
               lng: pos.coords.longitude,
               heading: pos.coords.heading || 0,
             };
-            const speed = (pos.coords.speed || 0) * 3.6; 
-            
+            const speed = (pos.coords.speed || 0) * 3.6;
             setDriverLocation(newLoc);
-            
+            writeToFirebase({ ...newLoc, speed });
+            // Also emit via socket if backend is available
             socketRef.current?.emit("driver:location-update", {
-              busId,
-              driverId: "drv_1",
-              lat: newLoc.lat,
-              lng: newLoc.lng,
-              heading: newLoc.heading,
-              speed,
-              timestamp: pos.timestamp,
-              status: "active",
+              busId, driverId: "drv_1",
+              lat: newLoc.lat, lng: newLoc.lng, heading: newLoc.heading,
+              speed, timestamp: pos.timestamp, status: "active",
             });
           },
           () => {
-            // Smooth mock drift — small incremental movement instead of random jumps
+            // Mock drift fallback
             mockLat += (Math.random() - 0.4) * 0.0003;
             mockLng += (Math.random() - 0.3) * 0.0004;
             mockHeading = (mockHeading + (Math.random() - 0.5) * 15 + 360) % 360;
-            const mockLoc = {
-               lat: mockLat,
-               lng: mockLng,
-               heading: Math.round(mockHeading),
-            };
+            const mockLoc = { lat: mockLat, lng: mockLng, heading: Math.round(mockHeading) };
             setDriverLocation(mockLoc);
+            writeToFirebase({ ...mockLoc, speed: 15 });
             socketRef.current?.emit("driver:location-update", {
-              busId,
-              driverId: "drv_1",
-              lat: mockLoc.lat,
-              lng: mockLoc.lng,
-              heading: mockLoc.heading,
-              speed: 15,
-              timestamp: Date.now(),
-              status: "active",
+              busId, driverId: "drv_1",
+              lat: mockLoc.lat, lng: mockLoc.lng, heading: mockLoc.heading,
+              speed: 15, timestamp: Date.now(), status: "active",
             });
           },
           { enableHighAccuracy: true, timeout: 5000 }
@@ -113,9 +120,9 @@ export default function DriverPage() {
 
   const handleStopTracking = useCallback(() => {
     setIsTracking(false);
-    if (socketRef.current && busId) {
-      socketRef.current.emit("driver:stop-tracking", { busId });
-    }
+    // Remove from Firebase Realtime DB so passengers see bus as gone
+    remove(ref(rtdb, `activeBuses/${busId}`)).catch(console.error);
+    socketRef.current?.emit("driver:stop-tracking", { busId });
     if (intervalIdRef.current) {
       clearInterval(intervalIdRef.current);
       intervalIdRef.current = null;

@@ -5,8 +5,21 @@ import PassengerMap from "@/components/maps/PassengerMap";
 import AccountTab from "@/components/passenger/AccountTab";
 import { useRoutes } from "@/hooks/useRoutes";
 import { Map as MapIcon, User, Loader2 } from "lucide-react";
+import { rtdb } from "@/lib/firebase";
+import { ref, onValue, off } from "firebase/database";
 
 type Tab = "map" | "account";
+
+interface ActiveBusData {
+  busId: string;
+  routeId: string;
+  lat: number;
+  lng: number;
+  heading: number;
+  speed: number;
+  status: string;
+  timestamp: number;
+}
 
 export default function PassengerPage() {
   const [activeTab, setActiveTab] = useState<Tab>("map");
@@ -14,45 +27,25 @@ export default function PassengerPage() {
   const [selectedRouteId, setSelectedRouteId] = useState("");
   const [activeBuses, setActiveBuses] = useState<Map<string, string>>(new Map());
 
+  // Listen to Firebase Realtime Database for active buses
+  // This works from any phone anywhere — no backend server needed!
   useEffect(() => {
-    let mounted = true;
-    let socket: any;
+    const busesRef = ref(rtdb, "activeBuses");
 
-    import("socket.io-client").then(({ io }) => {
-      if (!mounted) return;
-      socket = io(process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000", {
-        transports: ["websocket"],
-      });
-
-      socket.on("connect", () => {
-        socket.emit("passenger:join");
-      });
-
-      socket.on("bus:location-update", (payload: any) => {
-        if (payload.routeId && payload.busId) {
-          setActiveBuses((prev) => {
-            const next = new Map(prev);
-            next.set(payload.busId, payload.routeId);
-            return next;
-          });
-        }
-      });
-
-      socket.on("bus:stop-tracking", (payload: any) => {
-        if (payload.busId) {
-          setActiveBuses((prev) => {
-            const next = new Map(prev);
-            next.delete(payload.busId);
-            return next;
-          });
-        }
-      });
+    const handleSnapshot = onValue(busesRef, (snapshot) => {
+      const data = snapshot.val();
+      const newMap = new Map<string, string>();
+      if (data) {
+        Object.values(data as Record<string, ActiveBusData>).forEach((bus) => {
+          if (bus.routeId && bus.busId && bus.status === "active") {
+            newMap.set(bus.busId, bus.routeId);
+          }
+        });
+      }
+      setActiveBuses(newMap);
     });
 
-    return () => {
-      mounted = false;
-      if (socket) socket.disconnect();
-    };
+    return () => off(busesRef, "value", handleSnapshot);
   }, []);
 
   const activeRouteIds = Array.from(new Set(activeBuses.values()));
@@ -67,14 +60,14 @@ export default function PassengerPage() {
     } else if (currentAvailable.length === 0 && selectedRouteId) {
       setSelectedRouteId("");
     }
-  }, [activeRouteIdsStr, routes, selectedRouteId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRouteIdsStr, routes.length]);
 
   const availableRoutes = routes.filter(r => activeRouteIds.includes(r.id));
   const activeRoute = availableRoutes.find(r => r.id === selectedRouteId);
-  
-  // Use the new dynamic 'stops' array if available, fallback to terminus logic
-  const targetStop = activeRoute?.stops && activeRoute.stops.length > 0 
-    ? activeRoute.stops[activeRoute.stops.length - 1] 
+
+  const targetStop = activeRoute?.stops && activeRoute.stops.length > 0
+    ? activeRoute.stops[activeRoute.stops.length - 1]
     : (activeRoute?.waypoints && activeRoute.waypoints.length > 0 ? {
         id: "terminus",
         lat: activeRoute.waypoints[activeRoute.waypoints.length - 1].lat,
@@ -91,51 +84,51 @@ export default function PassengerPage() {
 
   return (
     <div className="flex flex-col h-screen bg-brand-dark text-white overflow-hidden">
-      {/* View Container */}
       <div className="relative flex-1 flex flex-col overflow-hidden">
         <div className={`absolute inset-0 z-0 ${activeTab === "map" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
           {activeRoute && targetStop ? (
             <>
-              {/* Route Selector Dashboard - Refined Block Style */}
+              {/* Route Selector */}
               <div className="absolute top-0 w-full z-40 bg-gradient-to-b from-brand-dark/95 to-transparent pt-safe px-4 pb-12">
-                 <div className="relative w-full max-w-lg mx-auto">
-                    <select
-                      value={selectedRouteId}
-                      onChange={(e) => setSelectedRouteId(e.target.value)}
-                      className="w-full h-14 backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl px-6 text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight"
-                    >
-                      {availableRoutes.map((r) => (
-                        <option key={r.id} value={r.id} className="bg-brand-dark">{r.name}</option>
-                      ))}
-                    </select>
-                    <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-30">
-                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                         <path d="M6 9l6 6 6-6" />
-                       </svg>
-                    </div>
-                 </div>
+                <div className="relative w-full max-w-lg mx-auto">
+                  <select
+                    value={selectedRouteId}
+                    onChange={(e) => setSelectedRouteId(e.target.value)}
+                    className="w-full h-14 backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl px-6 text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight"
+                  >
+                    {availableRoutes.map((r) => (
+                      <option key={r.id} value={r.id} className="bg-brand-dark">{r.name}</option>
+                    ))}
+                  </select>
+                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-30">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
-              <PassengerMap 
-                targetStop={targetStop} 
-                route={activeRoute} 
+              <PassengerMap
+                targetStop={targetStop}
+                route={activeRoute}
               />
             </>
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center bg-brand-dark px-10 text-center">
               <Loader2 className="w-10 h-10 text-white/20 animate-spin mb-6" />
               <p className="text-white/40 text-sm font-bold uppercase tracking-[0.2em]">Waiting for Operator...</p>
+              <p className="text-white/20 text-xs mt-2">Updates automatically when a driver goes online</p>
             </div>
           )}
         </div>
-        
+
         {/* Account View */}
         <div className={`absolute inset-0 z-10 flex flex-col bg-brand-dark transition-opacity duration-300 ${activeTab === "account" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
           <AccountTab />
         </div>
       </div>
 
-      {/* Bottom Navigation - Deep Charcoal Block Style */}
+      {/* Bottom Navigation */}
       <nav className="shrink-0 bg-brand-surface/80 border-t border-white/5 backdrop-blur-2xl pb-safe">
         <div className="flex items-center justify-around px-4 py-2 max-w-md mx-auto">
           <button
@@ -147,7 +140,7 @@ export default function PassengerPage() {
             <MapIcon className={`w-5 h-5 mb-1.5 ${activeTab === "map" ? "text-white" : "opacity-40"}`} />
             <span className="text-[9px] font-black tracking-[0.15em] uppercase">Live Map</span>
           </button>
-          
+
           <button
             onClick={() => setActiveTab("account")}
             className={`flex flex-col items-center justify-center py-3 flex-1 rounded-2xl transition-all duration-300 ${
