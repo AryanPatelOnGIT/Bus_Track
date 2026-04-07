@@ -11,6 +11,8 @@ import ETACard from "@/components/maps/ETACard";
 import { RouteStop, RouteData } from "@/hooks/useRoutes";
 import { interpolatePosition, getDistanceMeters } from "@/lib/mapUtils";
 import React from "react";
+import { rtdb } from "@/lib/firebase";
+import { ref, onValue, off } from "firebase/database";
 
 export interface PassengerMapProps {
   targetStop: RouteStop;
@@ -142,62 +144,67 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
   }, [geometryLib, route.polyline, route.waypoints]);
 
   // ══════════════════════════════════════════════════════════════════
-  //  2. SOCKET CONNECTION — receives bus positions + server-side ETAs
+  //  2. FIREBASE DB CONNECTION — Receives bus positions & computes ETA
   // ══════════════════════════════════════════════════════════════════
 
   useEffect(() => {
-    let mounted = true;
-    import("socket.io-client").then(({ io }) => {
-      if (!mounted) return;
-      const socket = io(
-        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000",
-        { transports: ["websocket"] }
-      );
-      socketRef.current = socket;
+    const busesRef = ref(rtdb, "activeBuses");
 
-      socket.on("connect", () => {
-        socket.emit("passenger:join");
-      });
+    const unsubscribe = onValue(busesRef, (snapshot) => {
+      const data = snapshot.val() as Record<string, IncomingBusData>;
+      if (!data) {
+        rawBusesRef.current.clear();
+        setLiveEtaMinutes(0);
+        setLiveDistKm("—");
+        setHasBus(false);
+        return;
+      }
 
-      // Bus location updates (for marker positioning)
-      socket.on("bus:location-update", (payload: IncomingBusData) => {
-        if (payload.routeId === route.id) {
-          rawBusesRef.current.set(payload.busId, payload);
-        }
-      });
+      let closestDist = Infinity;
+      let closestEta = 0;
+      let foundBusOnRoute = false;
 
-      // Server-side ETA updates — NO Google Maps API call on the client!
-      socket.on("bus:eta-update", (payload: ETAUpdatePayload) => {
-        if (payload.routeId === route.id) {
-          // Null-guard: socket payloads can arrive malformed
-          const etaMin = typeof payload?.etaMinutes === "number" ? payload.etaMinutes : 0;
-          const distKm = typeof payload?.distanceKm === "string" ? payload.distanceKm : "—";
+      // Update bus markers list
+      const currentIds = new Set<string>();
 
-          setLiveEtaMinutes(etaMin);
-          setLiveDistKm(distKm);
+      Object.values(data).forEach((bus) => {
+        if (bus.routeId === route.id && bus.status === "active") {
+          foundBusOnRoute = true;
+          currentIds.add(bus.busId);
+          rawBusesRef.current.set(bus.busId, bus);
 
-          // Optionally update the active segment polyline from server
-          if (payload?.polyline && activePolyRef.current && geometryLib) {
-            try {
-              const decoded = geometryLib.encoding.decodePath(payload.polyline);
-              activePolyRef.current.setPath(decoded);
-            } catch {
-              // Ignore decode errors for active segment
-            }
+          // Compute Client-Side ETA (Cheap Haversine, 15 km/h average)
+          const distMeters = getDistanceMeters({ lat: bus.lat, lng: bus.lng }, targetStop);
+          if (distMeters < closestDist) {
+            closestDist = distMeters;
+            closestEta = Math.ceil(distMeters / 250); // 15 km/h = 250m/min
           }
         }
       });
+
+      // Cleanup stale buses
+      for (const key of rawBusesRef.current.keys()) {
+        if (!currentIds.has(key)) {
+          rawBusesRef.current.delete(key);
+        }
+      }
+
+      setHasBus(foundBusOnRoute);
+
+      if (foundBusOnRoute && closestDist !== Infinity) {
+        setLiveEtaMinutes(closestEta);
+        setLiveDistKm((closestDist / 1000).toFixed(1));
+      } else {
+        setLiveEtaMinutes(0);
+        setLiveDistKm("—");
+      }
     });
 
     return () => {
-      mounted = false;
-      if (socketRef.current) {
-        socketRef.current.emit("passenger:leaveRoute", { routeId: route.id });
-        socketRef.current.disconnect();
-      }
+      off(busesRef, "value", unsubscribe);
       cancelAnimationFrame(frameRef.current);
     };
-  }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [route.id, targetStop]); // Re-bind if route or target changes
 
   // ══════════════════════════════════════════════════════════════════
   //  3. IMPERATIVE ANIMATION LOOP — updates Google Maps markers
