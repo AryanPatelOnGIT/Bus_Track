@@ -22,6 +22,14 @@ const config: Config = {
           surface: "#121E30",   // Card/panel background
           muted: "#1E2D45",     // Secondary surface
         },
+        // Anti-Gravity Apple Aesthetics
+        anti: {
+          canvas: "#FCFCFD",     // Warm cream-white background
+          glass: "rgba(255, 255, 255, 0.4)", // Frosted glass cards
+          glassBorder: "rgba(255, 255, 255, 0.6)", // Paper-thin edges
+          lilac: "#8B5CF6",      // Electric Lilac (accent)
+          lilacGlow: "rgba(139, 92, 246, 0.15)", // Lilac bioluminescence
+        },
         status: {
           active: "#22C55E",    // Green – bus moving
           idle: "#F59E0B",      // Amber – bus stopped
@@ -36,6 +44,14 @@ const config: Config = {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "fade-in": "fadeIn 0.4s ease-out forwards",
         "slide-up": "slideUp 0.4s ease-out forwards",
+        // Floating animations for Anti-Gravity UI
+        "float-slow": "float 8s ease-in-out infinite",
+        "float-medium": "float 6s ease-in-out infinite",
+        "float-fast": "float 4s ease-in-out infinite",
+      },
+      boxShadow: {
+        "anti-soft": "0 20px 40px -10px rgba(0,0,0,0.03), 0 10px 20px -5px rgba(0,0,0,0.02)",
+        "anti-glow": "0 0 40px 10px rgba(139, 92, 246, 0.1)", // Bioluminescent inner glow
       },
       keyframes: {
         fadeIn: {
@@ -45,6 +61,10 @@ const config: Config = {
         slideUp: {
           from: { transform: "translateY(16px)", opacity: "0" },
           to: { transform: "translateY(0)", opacity: "1" },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0) rotate(var(--tw-rotate))" },
+          "50%": { transform: "translateY(-12px) rotate(var(--tw-rotate))" },
         },
       },
     },

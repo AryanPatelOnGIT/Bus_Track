@@ -116,7 +116,7 @@ export default function PassengerPage() {
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center bg-brand-dark px-10 text-center">
               <Loader2 className="w-10 h-10 text-white/20 animate-spin mb-6" />
-              <p className="text-white/40 text-sm font-bold uppercase tracking-[0.2em]">Waiting for Operator...</p>
+              <p className="text-white/40 text-sm font-bold uppercase tracking-[0.2em]">Waiting for Operator (v5)...</p>
               <p className="text-white/20 text-xs mt-2">Updates automatically when a driver goes online</p>
             </div>
           )}
