@@ -19,12 +19,7 @@ export default function AccountTab() {
              )}
           </div>
           <div className="text-center">
-            {loading ? (
-              <div className="flex items-center justify-center gap-2 text-white/40">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm font-medium tracking-tight">Verifying...</span>
-              </div>
-            ) : user ? (
+            {user ? (
               <>
                 <h2 className="text-3xl font-bold font-display tracking-tight text-white mb-1" style={{ fontFamily: "Outfit, sans-serif" }}>
                   {user.displayName || "Rider"}

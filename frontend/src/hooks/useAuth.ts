@@ -30,6 +30,15 @@ export function useAuth() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // Optimistically set the user so Name/PFP renders instantly from local cache
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName,
+          photoURL: firebaseUser.photoURL,
+          role: "passenger", // Fallback until fetched
+        });
+
         try {
           // 1. SOURCE OF TRUTH: FIRESTORE
           const userDocRef = doc(db, "users", firebaseUser.uid);
@@ -82,7 +91,8 @@ export function useAuth() {
             role = "passenger";
           }
 
-          setUser({
+          // Update user state with the TRUE role now that Firestore has responded
+          setUser((prev) => prev ? { ...prev, role } : {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
             displayName: firebaseUser.displayName,
@@ -90,7 +100,7 @@ export function useAuth() {
             role,
           });
           
-          // CRITICAL: Unblock the UI immediately now that we have the user and role.
+          // CRITICAL: Unblock full UI dependencies
           setLoading(false);
 
           // 💾 BACKUP TO FIREBASE STORAGE (Run entirely in background without awaiting)
