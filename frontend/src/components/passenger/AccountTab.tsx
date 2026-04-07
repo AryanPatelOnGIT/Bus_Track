@@ -22,17 +22,16 @@ export default function AccountTab() {
             {loading ? (
               <div className="flex items-center justify-center gap-2 text-white/40">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm font-medium">Checking session...</span>
+                <span className="text-sm font-medium tracking-tight">Verifying...</span>
               </div>
             ) : user ? (
               <>
                 <h2 className="text-3xl font-bold font-display tracking-tight text-white mb-1" style={{ fontFamily: "Outfit, sans-serif" }}>
-                  {user.displayName || "Anonymous User"}
+                  {user.displayName || "Rider"}
                 </h2>
-                <div className="flex flex-col items-center gap-1">
-                  <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">Account Role</p>
-                  <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-blue-400 uppercase tracking-widest">
-                    {user.role || "Passenger"}
+                <div className="flex flex-col items-center">
+                  <span className="text-xs font-black text-blue-400 uppercase tracking-[0.25em]">
+                    {user.role?.toUpperCase() || "PASSENGER"}
                   </span>
                 </div>
               </>
@@ -41,8 +40,8 @@ export default function AccountTab() {
                 <h2 className="text-3xl font-bold font-display tracking-tight text-white mb-1" style={{ fontFamily: "Outfit, sans-serif" }}>
                   Guest Rider
                 </h2>
-                <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-white/40 uppercase tracking-widest">
-                  Unverified
+                <span className="text-xs font-black text-white/20 uppercase tracking-[0.25em]">
+                  UNVERIFIED
                 </span>
               </>
             )}
