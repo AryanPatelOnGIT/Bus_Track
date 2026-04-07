@@ -7,7 +7,7 @@ import DriverProfileTab from "@/components/driver/DriverProfileTab";
 import { useRoutes } from "@/hooks/useRoutes";
 import { Navigation, User } from "lucide-react";
 import { rtdb } from "@/lib/firebase";
-import { ref, set, remove } from "firebase/database";
+import { ref, set, remove, onDisconnect } from "firebase/database";
 
 // Mock location state — uses tiny increments instead of random jumps
 let mockLat = 23.0347;
@@ -61,8 +61,11 @@ export default function DriverPage() {
     });
 
     const writeToFirebase = (loc: { lat: number; lng: number; heading: number; speed: number }) => {
-      // Write directly to Firebase Realtime Database — works on any phone, no backend needed
+      // Write directly to Firebase Realtime Database
       const busRef = ref(rtdb, `activeBuses/${busId}`);
+      // If the driver closes the app/loses connection, remove the bus automatically
+      onDisconnect(busRef).remove().catch(() => {});
+      
       set(busRef, {
         busId,
         driverId: "drv_1",
@@ -121,7 +124,10 @@ export default function DriverPage() {
   const handleStopTracking = useCallback(() => {
     setIsTracking(false);
     // Remove from Firebase Realtime DB so passengers see bus as gone
-    remove(ref(rtdb, `activeBuses/${busId}`)).catch(console.error);
+    const busRef = ref(rtdb, `activeBuses/${busId}`);
+    remove(busRef).catch(console.error);
+    onDisconnect(busRef).cancel(); // Ensure we don't accidentally remove a future session
+    
     socketRef.current?.emit("driver:stop-tracking", { busId });
     if (intervalIdRef.current) {
       clearInterval(intervalIdRef.current);

@@ -37,7 +37,9 @@ export default function PassengerPage() {
       const newMap = new Map<string, string>();
       if (data) {
         Object.values(data as Record<string, ActiveBusData>).forEach((bus) => {
-          if (bus.routeId && bus.busId && bus.status === "active") {
+          // 5 minute buffer to avoid mobile clock drift hiding buses. OnDisconnect handles real disconnects.
+          const isFresh = Date.now() - bus.timestamp < 300000; 
+          if (bus.routeId && bus.busId && bus.status === "active" && isFresh) {
             newMap.set(bus.busId, bus.routeId);
           }
         });

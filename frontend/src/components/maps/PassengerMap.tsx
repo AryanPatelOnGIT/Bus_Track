@@ -168,7 +168,9 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
       const currentIds = new Set<string>();
 
       Object.values(data).forEach((bus) => {
-        if (bus.routeId === route.id && bus.status === "active") {
+        // 5 minute buffer to avoid mobile clock drift hiding buses. OnDisconnect handles real disconnects.
+        const isFresh = Date.now() - bus.timestamp < 300000; 
+        if (bus.routeId === route.id && bus.status === "active" && isFresh) {
           foundBusOnRoute = true;
           currentIds.add(bus.busId);
           rawBusesRef.current.set(bus.busId, bus);
