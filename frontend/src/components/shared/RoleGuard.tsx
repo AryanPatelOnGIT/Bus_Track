@@ -2,6 +2,7 @@
 
 import { useAuth, UserRole } from "@/hooks/useAuth";
 import { Loader2, ShieldAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface RoleGuardProps {
   children: React.ReactNode;
@@ -10,8 +11,21 @@ interface RoleGuardProps {
 
 export default function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
   const { user, loading, loginWithGoogle, logout } = useAuth();
+  const [timedOut, setTimedOut] = useState(false);
 
-  if (loading) {
+  // Hard 6-second bail-out: if still loading after 6s, stop and show login
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setTimeout(() => setTimedOut(true), 6000);
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  // Once auth resolves, reset the timeout flag
+  useEffect(() => {
+    if (!loading) setTimedOut(false);
+  }, [loading]);
+
+  if (loading && !timedOut) {
     return (
       <div className="w-full h-screen flex flex-col items-center justify-center bg-[#1d1d1f]">
         <Loader2 className="w-8 h-8 text-white/40 animate-spin mb-4" />
@@ -20,7 +34,7 @@ export default function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
     );
   }
 
-  if (!user) {
+  if (!user || timedOut) {
     return (
       <div className="w-full h-screen flex flex-col items-center justify-center bg-[#1d1d1f] text-white px-6 text-center">
         <ShieldAlert className="w-16 h-16 text-blue-500 mb-6" />
@@ -44,7 +58,8 @@ export default function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
         <ShieldAlert className="w-16 h-16 text-red-500 mb-6" />
         <h1 className="text-3xl font-bold tracking-tight mb-4 text-[#f5f5f7]">Unauthorized Role</h1>
         <p className="text-[#86868b] max-w-sm mb-8 leading-relaxed">
-          Your current account ({user.email}) does not have permission to view this panel. 
+          Your account <span className="text-white/80">({user.email})</span> does not have access to this panel.
+          <br />
           Current Role: <span className="text-[#f5f5f7] font-bold uppercase">{user.role}</span>
         </p>
         <div className="flex gap-4 border-t border-white/10 pt-8 mt-4">
