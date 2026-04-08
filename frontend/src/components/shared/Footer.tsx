@@ -9,7 +9,7 @@ export default function Footer() {
           {/* Brand & Mission */}
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-6">
-              <Bus className="w-6 h-6 text-white" />
+              <img src="/BusLogo.png" alt="BusTrack Logo" className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
               <span className="font-display font-bold text-2xl tracking-tighter text-white">
                 BusTrack
               </span>

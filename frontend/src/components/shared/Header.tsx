@@ -17,10 +17,10 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-[100] w-full border-b border-white/5 bg-brand-dark/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        {/* Brand Logo - Removed Emoji */}
+        {/* Brand Logo */}
         <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center transition-transform group-hover:scale-105">
-            <Bus className="w-5 h-5 text-brand-dark" />
+          <div className="w-10 h-10 flex items-center justify-center transition-transform group-hover:scale-105">
+            <img src="/BusLogo.png" alt="BusTrack Logo" className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
           </div>
           <span className="font-display font-bold text-xl tracking-tight text-white">
             Bus<span className="text-white/40">Track</span>
