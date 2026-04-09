@@ -29,15 +29,18 @@ graph TD
 
     %% Web connections
     Hosting -.->|Delivers Static Built App| Frontend
-    Frontend <-->|Authenticates| Auth
+    Frontend -->|Authenticates| Auth
+    Auth -->|Returns Token| Frontend
     
     %% Realtime Connections
     D -->|Push GPS| RTDB
-    P <--|Listen Updates| RTDB
-    A <-->|Listen & Override| RTDB
+    RTDB -->|Listen Updates| P
+    A -->|Listen and Override| RTDB
+    RTDB -->|Listen and Override| A
 
     %% Backend Connections
-    Frontend <-->|REST & WS| Express
+    Frontend -->|REST and WS| Express
+    Express -->|REST and WS| Frontend
     Express -->|Validates/Updates| FS
     Express -->|Computes Polylines| RoutesAPI
 ```
