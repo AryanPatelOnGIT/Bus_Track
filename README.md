@@ -160,22 +160,22 @@ BusTrack uses a modern hybrid, real-time architecture leveraging Firebase as the
 ```mermaid
 graph TD
     subgraph Frontend [Next.js Client Applications]
-        P[Passenger App<br/>Reads Live Data]
-        D[Driver Console<br/>Writes Live Data]
-        A[Admin Dashboard<br/>Full Access]
+        P["Passenger App<br/>(Reads Live Data)"]
+        D["Driver Console<br/>(Writes Live Data)"]
+        A["Admin Dashboard<br/>(Full Access)"]
     end
 
     subgraph Firebase Ecosystem
         Auth[Firebase Auth API]
-        RTDB[(Realtime Database)<br/>High-Frequency GPS]
-        FS[(Firestore)<br/>Persistent Data/Roles]
-        Hosting[Firebase Hosting<br/>Static CDN]
+        RTDB[("Realtime Database<br/>High-Frequency GPS")]
+        FS[("Firestore<br/>Persistent Data/Roles")]
+        Hosting["Firebase Hosting<br/>Static CDN"]
     end
 
     subgraph Cloud Container [Backend Server - Cloud Run/Render]
         Express[Node.js + Express]
         SocketIO[Socket.io Gateway]
-        RoutesAPI[Google Maps<br/>Routes API v2]
+        RoutesAPI["Google Maps<br/>Routes API v2"]
     end
 
     %% Web connections
