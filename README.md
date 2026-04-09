@@ -151,36 +151,131 @@ docker run -p 8080:8080 --env-file .env bustrack-backend
 
 ---
 
-## Deployment Architecture
+## Architecture & Data Flow
 
+BusTrack uses a modern hybrid, real-time architecture leveraging Firebase as the core streaming layer and a containerized Node.js backend for heavy computation. 
+
+### 1. High-Level Hub
+
+```mermaid
+graph TD
+    subgraph Frontend [Next.js Client Applications]
+        P[Passenger App<br/>Reads Live Data]
+        D[Driver Console<br/>Writes Live Data]
+        A[Admin Dashboard<br/>Full Access]
+    end
+
+    subgraph Firebase Ecosystem
+        Auth[Firebase Auth API]
+        RTDB[(Realtime Database)<br/>High-Frequency GPS]
+        FS[(Firestore)<br/>Persistent Data/Roles]
+        Hosting[Firebase Hosting<br/>Static CDN]
+    end
+
+    subgraph Cloud Container [Backend Server - Cloud Run/Render]
+        Express[Node.js + Express]
+        SocketIO[Socket.io Gateway]
+        RoutesAPI[Google Maps<br/>Routes API v2]
+    end
+
+    %% Web connections
+    Hosting -.->|Delivers Static Built App| Frontend
+    Frontend <-->|Authenticates| Auth
+    
+    %% Realtime Connections
+    D -->|Push GPS| RTDB
+    P <--|Listen Updates| RTDB
+    A <-->|Listen & Override| RTDB
+
+    %% Backend Connections
+    Frontend <-->|REST & WS| Express
+    Express -->|Validates/Updates| FS
+    Express -->|Computes Polylines| RoutesAPI
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      CLIENT                              │
-│  Browser: Next.js static site (Firebase Hosting CDN)    │
-│  ┌──────────────┐  ┌─────────────┐  ┌────────────────┐  │
-│  │  Passenger   │  │   Driver    │  │     Admin      │  │
-│  │     App      │  │     App     │  │   Dashboard    │  │
-│  └──────┬───────┘  └──────┬──────┘  └───────┬────────┘  │
-│         │                 │                  │           │
-│    Socket.io WS      Socket.io WS       REST + WS        │
-└─────────┼─────────────────┼──────────────────┼───────────┘
-          │                 │                  │
-          ▼                 ▼                  ▼
-┌─────────────────────────────────────────────────────────┐
-│              BACKEND (Cloud Run / Docker)                 │
-│  Express + Socket.io server (Node.js 24 Alpine)          │
-│  • trackingGateway — real-time bus state                 │
-│  • etaService — server-side ETA computation              │
-│  • REST routes — /api/buses, /api/analytics, /api/routes │
-│  • Security: helmet, rate-limit, input validation        │
-└─────────────────────────┬───────────────────────────────┘
-                          │
-          ┌───────────────┼───────────────┐
-          ▼               ▼               ▼
-   ┌─────────────┐ ┌─────────────┐ ┌───────────────┐
-   │  Firestore  │ │ Google Maps │ │   Firebase    │
-   │  (NoSQL DB) │ │ Routes API  │ │     Auth      │
-   └─────────────┘ └─────────────┘ └───────────────┘
+
+### 2. Role-Based Access Control (RBAC) Hierarchy
+
+The system employs a strict hierarchical Role-Based Access Control pattern. The `RoleGuard` wrapper checks a user's role initialized via Google Authentication against the page's permitted roles. 
+
+* **Admin:** Inherits all permissions. Can view `/admin`, `/driver`, and `/passenger`.
+* **Driver:** Can view `/driver` and `/passenger`.
+* **Passenger:** Can only view `/passenger`.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant RoleGuard
+    participant Firebase Auth
+    participant Firestore
+    participant Protected Page
+
+    User->>RoleGuard: Requests Route (e.g., /driver)
+    RoleGuard->>Firebase Auth: Check Auth State
+    
+    alt is authenticated
+        Firebase Auth-->>RoleGuard: Returns User ID
+        RoleGuard->>Firestore: Fetch User Role Document
+        Firestore-->>RoleGuard: Returns Role (e.g., 'admin')
+        
+        Note over RoleGuard: Array Check:<br>['driver', 'admin'].includes('admin')
+        
+        alt Role matches allowed roles
+            RoleGuard->>Protected Page: Render Children
+            Protected Page-->>User: Displays Dashboard
+        else Role NOT in allowed roles
+            RoleGuard-->>User: Renders 403 Access Restricted
+        end
+    else Not authenticated
+        RoleGuard-->>User: Renders Login Prompt
+    end
+```
+
+### 3. Real-Time GPS Data Flow
+
+Location updates happen completely outside the standard Node.js server. The Drivers stream directly to the Firebase Realtime Database (RTDB), which in turn publishes the updates to the Passenger app, ensuring sub-second latency globally.
+
+```mermaid
+graph LR
+    subgraph Client [Driver App]
+        GPS1[Browser Geolocation API]
+        GPS1 -->|1. Emits coords every 5s| DBClient[Frontend Firebase SDK]
+    end
+
+    subgraph Firebase [Google Cloud]
+        RTDB[( Firebase Realtime Database )]
+    end
+
+    subgraph Subscribers [Listeners]
+        PApp[Passenger Live Map]
+        AApp[Admin Fleet Map]
+    end
+
+    DBClient -->|2. HTTP Upgrade/WebSocket| RTDB
+    
+    RTDB -->|3. Data Sync Stream| PApp
+    RTDB -->|3. Data Sync Stream| AApp
+
+    style RTDB fill:#ffca28,stroke:#f57f17,stroke-width:2px,color:black
+```
+
+### 4. Auth Fallback & Loading Cycle
+
+As implemented in `RoleGuard`, to prevent infinite loading screens when Firestore latency issues occur or network connections drop:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Authenticating: Page Load
+    Authenticating --> VerifyingAuth: Auth State Changed
+    VerifyingAuth --> FetchedRole: Firebase Responds < 6s
+    VerifyingAuth --> TimeoutFallback: > 6s Elapsed
+    
+    FetchedRole --> Allowed: Role Valid
+    FetchedRole --> Denied: Role Invalid
+    
+    TimeoutFallback --> Denied: Show "Access Restricted"
+    
+    Allowed --> [*]: Render Context
+    Denied --> [*]: Render Error & Prompt Login
 ```
 
 ---
