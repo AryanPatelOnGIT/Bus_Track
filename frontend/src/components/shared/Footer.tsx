@@ -8,9 +8,9 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
           {/* Brand & Mission */}
           <div className="md:col-span-2">
-            <div className="flex items-center gap-2 mb-6">
-              <img src="/BusLogo.png" alt="BusTrack Logo" className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
-              <span className="font-display font-bold text-2xl tracking-tighter text-white">
+            <div className="flex items-center gap-3 mb-6">
+              <img src="/BusLogo.png" alt="BusTrack Logo" className="w-40 h-40 object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.5)]" />
+              <span className="font-display font-bold text-5xl tracking-tighter text-white italic">
                 BusTrack
               </span>
             </div>

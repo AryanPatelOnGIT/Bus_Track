@@ -12,17 +12,17 @@ const NAV_LINKS = [
 ];
 
 export default function Header() {
-  const pathname = usePathname();
+  const pathname = usePathname(); 
 
   return (
     <header className="sticky top-0 z-[100] w-full border-b border-white/5 bg-brand-dark/80 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-32 flex items-center justify-between">
         {/* Brand Logo */}
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-10 h-10 flex items-center justify-center transition-transform group-hover:scale-105">
-            <img src="/BusLogo.png" alt="BusTrack Logo" className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
+        <Link href="/" className="flex items-center gap-4 group">
+          <div className="w-32 h-32 flex items-center justify-center transition-transform group-hover:scale-110">
+            <img src="/BusLogo.png" alt="BusTrack Logo" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" />
           </div>
-          <span className="font-display font-bold text-xl tracking-tight text-white">
+          <span className="font-display font-bold text-4xl tracking-tight text-white italic">
             Bus<span className="text-white/40">Track</span>
           </span>
         </Link>

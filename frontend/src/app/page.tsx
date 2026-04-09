@@ -70,10 +70,10 @@ export default function HomePage() {
 
       {/* ── NAV BAR ─── Apple.com style */}
       <nav style={{ background: "rgba(255,255,255,0.9)", backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)", position: "sticky", top: 0, zIndex: 100, borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
-        <div style={{ maxWidth: 980, margin: "0 auto", padding: "0 22px", height: 48, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none" }}>
-            <img src="/BusLogo.png" alt="BusTrack Logo" style={{ width: 28, height: 28, objectFit: "contain" }} />
-            <span style={{ fontSize: 18, fontWeight: 600, color: "#1d1d1f", letterSpacing: "-0.02em" }}>BusTrack</span>
+        <div style={{ maxWidth: 980, margin: "0 auto", padding: "0 22px", height: 120, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, textDecoration: "none" }}>
+            <img src="/BusLogo.png" alt="BusTrack Logo" style={{ width: 110, height: 110, objectFit: "contain" }} />
+            <span style={{ fontSize: 36, fontWeight: 700, color: "#1d1d1f", letterSpacing: "-0.04em", fontStyle: "italic" }}>BusTrack</span>
           </div>
           <div style={{ display: "flex", alignItems: "center" }}>
             {[{ label: "Passenger", href: "/passenger" }, { label: "Driver", href: "/driver" }, { label: "Admin", href: "/admin" }].map(l => (
