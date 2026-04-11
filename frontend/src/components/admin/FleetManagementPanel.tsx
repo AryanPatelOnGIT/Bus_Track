@@ -35,14 +35,19 @@ export default function FleetManagementPanel() {
       setNewBusId("");
       setNewBusName("");
       setNewBusRouteId("");
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error adding bus", e);
+      alert("Failed to add Vehicle: " + e.message);
     }
   };
 
   const handleDeleteBus = async (id: string) => {
     if (confirm("Delete bus?")) {
-      await deleteDoc(doc(db, "buses", id));
+      try {
+        await deleteDoc(doc(db, "buses", id));
+      } catch (e: any) {
+        alert("Failed to delete Vehicle: " + e.message);
+      }
     }
   };
 
@@ -58,14 +63,19 @@ export default function FleetManagementPanel() {
       setNewDriverId("");
       setNewDriverName("");
       setNewDriverBusId("");
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error adding driver", e);
+      alert("Failed to add Operator: " + e.message);
     }
   };
 
   const handleDeleteDriver = async (id: string) => {
     if (confirm("Delete driver?")) {
-      await deleteDoc(doc(db, "drivers", id));
+      try {
+        await deleteDoc(doc(db, "drivers", id));
+      } catch (e: any) {
+        alert("Failed to delete Operator: " + e.message);
+      }
     }
   };
 
