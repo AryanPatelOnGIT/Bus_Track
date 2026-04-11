@@ -13,6 +13,7 @@ import { interpolatePosition, getDistanceMeters } from "@/lib/mapUtils";
 import React from "react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, off } from "firebase/database";
+import { buzzController } from "@/lib/audioUtils";
 
 export interface PassengerMapProps {
   targetStop: RouteStop;
@@ -96,6 +97,9 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
 
   // Track whether any bus exists (for the ETA card loading state)
   const [hasBus, setHasBus] = useState(false);
+  
+  // Track last buzzed stop to prevent repeated buzzing
+  const lastBuzzedStopIdRef = useRef<string | null>(null);
 
   // ══════════════════════════════════════════════════════════════════
   //  1. STATIC ROUTE POLYLINE — from Firestore, ZERO API calls
@@ -196,6 +200,14 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
       if (foundBusOnRoute && closestDist !== Infinity) {
         setLiveEtaMinutes(closestEta);
         setLiveDistKm((closestDist / 1000).toFixed(1));
+
+        // Trigger buzz if close to target stop (e.g., within 150m)
+        if (closestDist < 150) {
+          if (lastBuzzedStopIdRef.current !== targetStop.id) {
+            buzzController.playBuzz([300, 150, 300, 150, 500]);
+            lastBuzzedStopIdRef.current = targetStop.id;
+          }
+        }
       } else {
         setLiveEtaMinutes(0);
         setLiveDistKm("—");
@@ -276,9 +288,10 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
         }
 
         // Mark that we have a bus
-        if (!hasBus) {
-          setHasBus(true);
-        }
+        setHasBus(prev => {
+          if (!prev) return true;
+          return prev;
+        });
       });
 
       // Clean up markers for buses that no longer exist
@@ -311,19 +324,46 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
         mapId="b1b1b1b1b1b1b1b1"
         gestureHandling="greedy"
       >
-        {/* Target Stop Marker — static position, minimal re-renders */}
-        <AdvancedMarker position={targetStop}>
-          <div className="relative flex flex-col items-center">
-            <span className="mb-3 px-4 py-1.5 bg-brand-surface border border-white/10 text-white rounded-xl text-[10px] whitespace-nowrap z-50 shadow-3xl font-black uppercase tracking-[0.2em]">
-              {targetStop.shortName}
-            </span>
-            <div
-              className="absolute w-6 h-6 bg-white/20 rounded-full"
-              style={{ animation: "ripple 2s infinite" }}
-            />
-            <div className="flex items-center justify-center w-6 h-6 bg-white border-4 border-brand-dark rounded-full z-10 shadow-3xl" />
-          </div>
-        </AdvancedMarker>
+        {/* All Route Stops */}
+        {route.stops?.map((stop, i) => (
+          <AdvancedMarker key={`stop-${stop.id || i}`} position={{ lat: stop.lat, lng: stop.lng }}>
+            {stop.id === targetStop.id ? (
+              <div className="relative flex flex-col items-center">
+                <span className="mb-3 px-4 py-1.5 bg-brand-surface border border-white/10 text-white rounded-xl text-[10px] whitespace-nowrap z-50 shadow-3xl font-black uppercase tracking-[0.2em]">
+                  {stop.shortName}
+                </span>
+                <div
+                  className="absolute w-6 h-6 bg-white/20 rounded-full"
+                  style={{ animation: "ripple 2s infinite" }}
+                />
+                <div className="flex items-center justify-center w-6 h-6 bg-white border-4 border-brand-dark rounded-full z-10 shadow-3xl" />
+              </div>
+            ) : (
+              <div className="relative flex flex-col items-center opacity-70 scale-75">
+                 <div className="flex items-center justify-center w-4 h-4 bg-white border-4 border-brand-dark rounded-full shadow-lg" />
+                 <span className="mt-1 px-2 py-0.5 bg-brand-dark/80 text-white rounded-[4px] text-[8px] whitespace-nowrap opacity-60 font-black uppercase tracking-widest">
+                  {stop.shortName}
+                </span>
+              </div>
+            )}
+          </AdvancedMarker>
+        ))}
+
+        {/* If targetStop is NOT in route.stops (e.g. terminus/fallback), render it manually */}
+        {!route.stops?.find(s => s.id === targetStop.id) && (
+          <AdvancedMarker position={targetStop}>
+            <div className="relative flex flex-col items-center">
+              <span className="mb-3 px-4 py-1.5 bg-brand-surface border border-white/10 text-white rounded-xl text-[10px] whitespace-nowrap z-50 shadow-3xl font-black uppercase tracking-[0.2em]">
+                {targetStop.shortName}
+              </span>
+              <div
+                className="absolute w-6 h-6 bg-white/20 rounded-full"
+                style={{ animation: "ripple 2s infinite" }}
+              />
+              <div className="flex items-center justify-center w-6 h-6 bg-white border-4 border-brand-dark rounded-full z-10 shadow-3xl" />
+            </div>
+          </AdvancedMarker>
+        )}
         {/* Bus markers are imperative — NOT rendered via React */}
       </GoogleMap>
 

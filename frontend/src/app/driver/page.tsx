@@ -4,8 +4,11 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import TransmitterControls from "@/components/driver/TransmitterControls";
 import DriverMap from "@/components/maps/DriverMap";
 import DriverProfileTab from "@/components/driver/DriverProfileTab";
+import MessagingPanel from "@/components/shared/MessagingPanel";
+import { useAuth } from "@/hooks/useAuth";
 import { useRoutes } from "@/hooks/useRoutes";
-import { Navigation, User } from "lucide-react";
+import { useDrivers } from "@/hooks/useDrivers";
+import { Navigation, User, MessageSquare } from "lucide-react";
 import { rtdb } from "@/lib/firebase";
 import { ref, set, remove, onDisconnect } from "firebase/database";
 
@@ -14,11 +17,26 @@ let mockLat = 23.0347;
 let mockLng = 72.5483;
 let mockHeading = 45;
 
-type Tab = "map" | "profile";
+type Tab = "map" | "messages" | "profile";
 
 export default function DriverPage() {
+  const { user } = useAuth();
   const { routes } = useRoutes();
-  const [busId, setBusId] = useState("BRTS-101");
+  const { drivers } = useDrivers();
+  const [driverId, setDriverId] = useState("");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("driverId");
+    if (saved) setDriverId(saved);
+  }, []);
+
+  useEffect(() => {
+     if (driverId) localStorage.setItem("driverId", driverId);
+  }, [driverId]);
+
+  const activeDriver = drivers.find(d => d.id === driverId);
+  const busId = activeDriver?.assignedBusId || "";
+  
   const [selectedRouteId, setSelectedRouteId] = useState("");
   const [isTracking, setIsTracking] = useState(false);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number; heading: number } | null>(null);
@@ -56,7 +74,7 @@ export default function DriverPage() {
     // Tell the backend socket (if available) that tracking started
     socketRef.current?.emit("driver:start-tracking", {
       busId,
-      driverId: "drv_1",
+      driverId: driverId,
       routeId: selectedRouteId
     });
 
@@ -68,7 +86,7 @@ export default function DriverPage() {
       
       set(busRef, {
         busId,
-        driverId: "drv_1",
+        driverId: driverId,
         routeId: selectedRouteId,
         lat: loc.lat,
         lng: loc.lng,
@@ -93,7 +111,7 @@ export default function DriverPage() {
             writeToFirebase({ ...newLoc, speed });
             // Also emit via socket if backend is available
             socketRef.current?.emit("driver:location-update", {
-              busId, driverId: "drv_1",
+              busId, driverId,
               lat: newLoc.lat, lng: newLoc.lng, heading: newLoc.heading,
               speed, timestamp: pos.timestamp, status: "active",
             });
@@ -107,7 +125,7 @@ export default function DriverPage() {
             setDriverLocation(mockLoc);
             writeToFirebase({ ...mockLoc, speed: 15 });
             socketRef.current?.emit("driver:location-update", {
-              busId, driverId: "drv_1",
+              busId, driverId,
               lat: mockLoc.lat, lng: mockLoc.lng, heading: mockLoc.heading,
               speed: 15, timestamp: Date.now(), status: "active",
             });
@@ -163,7 +181,9 @@ export default function DriverPage() {
           <div className="absolute bottom-0 w-full z-10">
             <TransmitterControls
               busId={busId}
-              setBusId={setBusId}
+              driverId={driverId}
+              setDriverId={setDriverId}
+              drivers={drivers}
               selectedRouteId={selectedRouteId}
               setSelectedRouteId={setSelectedRouteId}
               isTracking={isTracking}
@@ -175,7 +195,18 @@ export default function DriverPage() {
         </div>
         
         <div className={`absolute inset-0 z-10 flex flex-col bg-brand-dark transition-opacity duration-300 ${activeTab === "profile" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-          <DriverProfileTab driverId="drv_1" busId={busId} />
+          <DriverProfileTab driverId={driverId || "UNASSIGNED"} busId={busId || "UNASSIGNED"} />
+        </div>
+
+        <div className={`absolute inset-0 z-20 flex flex-col pt-10 bg-brand-dark transition-opacity duration-300 ${activeTab === "messages" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
+          <div className="flex-1 pb-safe overflow-hidden">
+            <MessagingPanel
+              busId={busId}
+              currentUserRole="driver"
+              currentUserId={user?.uid || driverId || "operator"}
+              currentUserName={user?.displayName || "Operator"}
+            />
+          </div>
         </div>
       </div>
 
@@ -192,6 +223,16 @@ export default function DriverPage() {
             <span className="text-[9px] font-black tracking-[0.15em] uppercase">Drive View</span>
           </button>
           
+          <button
+            onClick={() => setActiveTab("messages")}
+            className={`flex flex-col items-center justify-center py-3 flex-1 rounded-2xl transition-all duration-300 ${
+              activeTab === "messages" ? "text-white bg-white/5 transform scale-105" : "text-white/30 hover:text-white/60"
+            }`}
+          >
+            <MessageSquare className={`w-5 h-5 mb-1.5 ${activeTab === "messages" ? "text-white" : "opacity-40"}`} />
+            <span className="text-[9px] font-black tracking-[0.15em] uppercase">Messages</span>
+          </button>
+
           <button
             onClick={() => setActiveTab("profile")}
             className={`flex flex-col items-center justify-center py-3 flex-1 rounded-2xl transition-all duration-300 ${

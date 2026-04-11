@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import PassengerMap from "@/components/maps/PassengerMap";
 import AccountTab from "@/components/passenger/AccountTab";
+import MessagingPanel from "@/components/shared/MessagingPanel";
+import FeedbackModal from "@/components/shared/FeedbackModal";
+import { useAuth } from "@/hooks/useAuth";
 import { useRoutes } from "@/hooks/useRoutes";
-import { Map as MapIcon, User, Loader2 } from "lucide-react";
+import { Map as MapIcon, User, Loader2, MessageSquare } from "lucide-react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, off } from "firebase/database";
+import { buzzController } from "@/lib/audioUtils";
 
 type Tab = "map" | "account";
 
@@ -22,10 +26,19 @@ interface ActiveBusData {
 }
 
 export default function PassengerPage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("map");
   const { routes } = useRoutes();
   const [selectedRouteId, setSelectedRouteId] = useState("");
+  const [selectedStopId, setSelectedStopId] = useState("");
   const [activeBuses, setActiveBuses] = useState<Map<string, string>>(new Map());
+  const [isMessagingOpen, setIsMessagingOpen] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackBusId, setFeedbackBusId] = useState("");
+  const [feedbackDriverId, setFeedbackDriverId] = useState("");
+  const trackingBusIdRef = useRef<string | null>(null);
+  const trackingDriverIdRef = useRef<string | null>(null);
+  const latestBusDriversRef = useRef<Map<string, string>>(new Map());
 
   // Listen to Firebase Realtime Database for active buses
   // This works from any phone anywhere — no backend server needed!
@@ -35,15 +48,20 @@ export default function PassengerPage() {
     const handleSnapshot = onValue(busesRef, (snapshot) => {
       const data = snapshot.val();
       const newMap = new Map<string, string>();
+      const driverMap = new Map<string, string>();
       if (data) {
-        Object.values(data as Record<string, ActiveBusData>).forEach((bus) => {
+        Object.values(data as Record<string, ActiveBusData & { driverId?: string }>).forEach((bus) => {
           // 5 minute buffer to avoid mobile clock drift hiding buses. OnDisconnect handles real disconnects.
           const isFresh = Date.now() - bus.timestamp < 300000; 
           if (bus.routeId && bus.busId && bus.status === "active" && isFresh) {
             newMap.set(bus.busId, bus.routeId);
+            if (bus.driverId) {
+              driverMap.set(bus.busId, bus.driverId);
+            }
           }
         });
       }
+      latestBusDriversRef.current = driverMap;
       setActiveBuses(newMap);
     });
 
@@ -62,13 +80,21 @@ export default function PassengerPage() {
     } else if (currentAvailable.length === 0 && selectedRouteId) {
       setSelectedRouteId("");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRouteIdsStr, routes.length]);
+  }, [activeRouteIdsStr, routes.length, selectedRouteId]);
 
   const availableRoutes = routes.filter(r => activeRouteIds.includes(r.id));
   const activeRoute = availableRoutes.find(r => r.id === selectedRouteId);
 
-  const targetStop = activeRoute?.stops && activeRoute.stops.length > 0
+  useEffect(() => {
+    if (activeRoute && activeRoute.stops && activeRoute.stops.length > 0) {
+      if (!selectedStopId || !activeRoute.stops.some(s => s.id === selectedStopId)) {
+        setSelectedStopId(activeRoute.stops[activeRoute.stops.length - 1].id);
+      }
+    }
+  }, [activeRoute, selectedStopId]);
+
+  const targetStop = activeRoute?.stops?.find(s => s.id === selectedStopId) || 
+    (activeRoute?.stops && activeRoute.stops.length > 0
     ? activeRoute.stops[activeRoute.stops.length - 1]
     : (activeRoute?.waypoints && activeRoute.waypoints.length > 0 ? {
         id: "terminus",
@@ -82,7 +108,32 @@ export default function PassengerPage() {
         lng: 72.5483,
         name: "Tracking Area",
         shortName: "LIVE"
-      });
+      }));
+
+  const activeBusOnRoute = Array.from(activeBuses.keys()).find(id => activeBuses.get(id) === selectedRouteId);
+
+  useEffect(() => {
+    let timerId: NodeJS.Timeout;
+
+    if (activeBusOnRoute) {
+      trackingBusIdRef.current = activeBusOnRoute;
+      trackingDriverIdRef.current = latestBusDriversRef.current.get(activeBusOnRoute) || null;
+    } else if (trackingBusIdRef.current) {
+      const finishedBusId = trackingBusIdRef.current;
+      const finishedDriverId = trackingDriverIdRef.current;
+      timerId = setTimeout(() => {
+         setFeedbackBusId(finishedBusId);
+         setFeedbackDriverId(finishedDriverId || "");
+         setShowFeedbackModal(true);
+         trackingBusIdRef.current = null;
+         trackingDriverIdRef.current = null;
+      }, 10000);
+    }
+
+    return () => {
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [activeBusOnRoute]);
 
   return (
     <div className="flex flex-col h-screen bg-brand-dark text-white overflow-hidden">
@@ -91,11 +142,14 @@ export default function PassengerPage() {
           {activeRoute && targetStop ? (
             <>
               {/* Route Selector */}
-              <div className="absolute top-0 w-full z-40 bg-gradient-to-b from-brand-dark/95 to-transparent pt-safe px-4 pb-12">
+              <div className="absolute top-0 w-full z-40 bg-gradient-to-b from-brand-dark/95 to-transparent pt-safe px-4 pb-12 flex flex-col gap-3">
                 <div className="relative w-full max-w-lg mx-auto">
                   <select
                     value={selectedRouteId}
-                    onChange={(e) => setSelectedRouteId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedRouteId(e.target.value);
+                      buzzController.unlock();
+                    }}
                     className="w-full h-14 backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl px-6 text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight"
                   >
                     {availableRoutes.map((r) => (
@@ -108,7 +162,55 @@ export default function PassengerPage() {
                     </svg>
                   </div>
                 </div>
+
+                {activeRoute?.stops && activeRoute.stops.length > 0 && (
+                  <div className="relative w-full max-w-lg mx-auto">
+                    <select
+                      value={selectedStopId}
+                      onChange={(e) => {
+                        setSelectedStopId(e.target.value);
+                        buzzController.unlock();
+                      }}
+                      className="w-full h-12 backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl px-6 text-white text-xs focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight"
+                    >
+                      {activeRoute.stops.map((s) => (
+                        <option key={s.id} value={s.id} className="bg-brand-dark">Alight at: {s.name}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-30">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* Messaging Button */}
+              {activeRouteIds.includes(activeRoute.id) && !isMessagingOpen && (
+                <div className="absolute bottom-48 right-4 z-40">
+                  <button 
+                    onClick={() => setIsMessagingOpen(true)}
+                    className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                  >
+                    <MessageSquare className="w-6 h-6" />
+                  </button>
+                </div>
+              )}
+
+              {/* Messaging Overlay */}
+              {isMessagingOpen && (
+                <div className="absolute inset-x-0 bottom-0 top-32 z-50 animate-slide-up">
+                  <MessagingPanel
+                    busId={Array.from(activeBuses.keys()).find(id => activeBuses.get(id) === activeRoute.id) || ""}
+                    currentUserRole="passenger"
+                    currentUserId={user?.uid || "anonymous"}
+                    currentUserName={user?.displayName || "Rider"}
+                    isOverlay={true}
+                    onClose={() => setIsMessagingOpen(false)}
+                  />
+                </div>
+              )}
 
               <PassengerMap
                 targetStop={targetStop}
@@ -129,6 +231,16 @@ export default function PassengerPage() {
           <AccountTab />
         </div>
       </div>
+
+      {showFeedbackModal && (
+        <FeedbackModal
+          userId={user?.uid || "anonymous"}
+          userName={user?.displayName || "Rider"}
+          busId={feedbackBusId}
+          driverId={feedbackDriverId}
+          onClose={() => setShowFeedbackModal(false)}
+        />
+      )}
 
       {/* Bottom Navigation */}
       <nav className="shrink-0 bg-brand-surface/80 border-t border-white/5 backdrop-blur-2xl pb-safe">

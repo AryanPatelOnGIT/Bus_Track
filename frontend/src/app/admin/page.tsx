@@ -3,9 +3,13 @@
 import Header from "@/components/shared/Header";
 import Footer from "@/components/shared/Footer";
 import RouteManagementPanel from "@/components/admin/RouteManagementPanel";
-import { ShieldCheck, Map as MapIcon } from "lucide-react";
+import FleetManagementPanel from "@/components/admin/FleetManagementPanel";
+import { ShieldCheck, Map as MapIcon, Users } from "lucide-react";
+import { useState } from "react";
 
 export default function AdminPage() {
+  const [activeTab, setActiveTab] = useState<"routes" | "fleet">("routes");
+
   return (
     <main className="min-h-screen bg-brand-dark text-white flex flex-col font-sans">
       <Header />
@@ -23,21 +27,39 @@ export default function AdminPage() {
             </h1>
           </div>
 
-          <div className="flex px-8 py-3 bg-brand-dark/50 rounded-2xl border border-white/5 w-fit items-center gap-3">
-             <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center text-brand-dark shadow-2xl">
-                <MapIcon className="w-4 h-4" />
-             </div>
-             <div className="flex flex-col">
-                <span className="text-[10px] font-black text-white/20 uppercase tracking-widest leading-none mb-1">Active Module</span>
-                <span className="text-sm font-black text-white uppercase tracking-widest leading-none">Route Manager</span>
-             </div>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setActiveTab("routes")}
+              className={`flex px-6 py-3 rounded-2xl border transition-all w-fit items-center gap-3 ${activeTab === 'routes' ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent hover:bg-white/5'}`}
+            >
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-lg transition-colors ${activeTab === 'routes' ? 'bg-white text-brand-dark' : 'bg-white/10 text-white/40'}`}>
+                  <MapIcon className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col text-left">
+                  <span className={`text-[9px] font-black uppercase tracking-widest leading-none mb-1 transition-colors ${activeTab === 'routes' ? 'text-white/40' : 'text-white/20'}`}>Module</span>
+                  <span className={`text-sm font-black uppercase tracking-widest leading-none transition-colors ${activeTab === 'routes' ? 'text-white' : 'text-white/40'}`}>Routes</span>
+              </div>
+            </button>
+            
+            <button 
+              onClick={() => setActiveTab("fleet")}
+              className={`flex px-6 py-3 rounded-2xl border transition-all w-fit items-center gap-3 ${activeTab === 'fleet' ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent hover:bg-white/5'}`}
+            >
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-lg transition-colors ${activeTab === 'fleet' ? 'bg-white text-brand-dark' : 'bg-white/10 text-white/40'}`}>
+                  <Users className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col text-left">
+                  <span className={`text-[9px] font-black uppercase tracking-widest leading-none mb-1 transition-colors ${activeTab === 'fleet' ? 'text-white/40' : 'text-white/20'}`}>Module</span>
+                  <span className={`text-sm font-black uppercase tracking-widest leading-none transition-colors ${activeTab === 'fleet' ? 'text-white' : 'text-white/40'}`}>Fleet</span>
+              </div>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Content Area - Only Route Management (Map) */}
+      {/* Content Area */}
       <div className="flex-1 bg-brand-dark/20">
-        <RouteManagementPanel />
+        {activeTab === "routes" ? <RouteManagementPanel /> : <FleetManagementPanel />}
       </div>
 
       <Footer />

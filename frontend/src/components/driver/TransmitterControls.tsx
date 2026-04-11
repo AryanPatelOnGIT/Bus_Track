@@ -4,10 +4,14 @@ import { useState, useEffect } from "react";
 import { useRoutes } from "@/hooks/useRoutes";
 import { Bus, Navigation, Play, Square, ChevronDown, ChevronUp, MapPin } from "lucide-react";
 
+import { DriverData } from "@/hooks/useDrivers";
+
 interface Props {
   onNewRequest?: (req: any) => void;
   busId: string;
-  setBusId: (id: string) => void;
+  driverId: string;
+  setDriverId: (id: string) => void;
+  drivers: DriverData[];
   selectedRouteId: string;
   setSelectedRouteId: (id: string) => void;
   isTracking: boolean;
@@ -18,6 +22,9 @@ interface Props {
 
 export default function TransmitterControls({
   busId,
+  driverId,
+  setDriverId,
+  drivers,
   selectedRouteId,
   setSelectedRouteId,
   isTracking,
@@ -68,14 +75,43 @@ export default function TransmitterControls({
               <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
                 <Bus className="w-4 h-4 text-white/50" />
               </div>
-              <span className="font-black font-mono tracking-widest text-white/80">{busId || "BRTS-101"}</span>
+              <span className="font-black font-mono tracking-widest text-white/80">{busId || "UNASSIGNED"}</span>
             </div>
             <div className="flex items-center gap-2">
-               <span className="w-2 h-2 rounded-full bg-status-active shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-               <span className="text-[9px] font-black tracking-widest text-status-active uppercase">Operational</span>
+               {isTracking ? (
+                 <>
+                   <span className="w-2 h-2 rounded-full bg-status-active shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+                   <span className="text-[9px] font-black tracking-widest text-status-active uppercase">Operational</span>
+                 </>
+               ) : (
+                 <>
+                   <span className="w-2 h-2 rounded-full bg-white/20" />
+                   <span className="text-[9px] font-black tracking-widest text-white/40 uppercase">Offline</span>
+                 </>
+               )}
             </div>
           </div>
         </div>
+
+        {/* Operator Selector */}
+        {!isTracking && (
+          <div className="space-y-3">
+            <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Operator Identity</label>
+            <div className="relative">
+              <select
+                value={driverId}
+                onChange={(e) => setDriverId(e.target.value)}
+                className="w-full h-14 bg-brand-dark/40 border border-white/5 rounded-2xl px-6 py-2.5 text-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-white/10 appearance-none shadow-inner"
+              >
+                <option value="">— SELECT PROfILE —</option>
+                {drivers.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name} ({d.id})</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 pointer-events-none" />
+            </div>
+          </div>
+        )}
 
         {/* Path Selector */}
         <div className="space-y-3">
@@ -104,8 +140,8 @@ export default function TransmitterControls({
           {!isTracking ? (
             <button
               onClick={onStartTracking}
-              disabled={!busId}
-              className="w-full py-5 rounded-[1.5rem] bg-white text-brand-dark font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-3xl flex items-center justify-center gap-3 tracking-[0.1em]"
+              disabled={!busId || !driverId || !selectedRouteId}
+              className="w-full py-5 rounded-[1.5rem] bg-white text-brand-dark font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-3xl flex items-center justify-center gap-3 tracking-[0.1em] disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Play className="w-4 h-4 fill-brand-dark" />
               GO LIVE

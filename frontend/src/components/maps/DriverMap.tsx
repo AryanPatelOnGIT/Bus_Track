@@ -445,19 +445,45 @@ function DriverMapInner({ route, targetStop, driverLocation, socketRef, busId }:
           mapId={"b1b1b1b1b1b1b1b1"}
           gestureHandling="greedy"
         >
-          {/* Target stop marker */}
-          <AdvancedMarker position={targetStop}>
-            <div className="relative flex flex-col items-center">
-              <div
-                className="absolute w-5 h-5 bg-blue-500 rounded-full"
-                style={{ animation: "ripple 2s infinite" }}
-              />
-              <div className="w-5 h-5 bg-white border-4 border-brand-dark rounded-full z-10" />
-              <span className="mt-2 px-3 py-1 bg-brand-surface border border-white/10 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest z-20 shadow-3xl">
-                {targetStop.shortName}
-              </span>
-            </div>
-          </AdvancedMarker>
+          {/* Target stop marker & All Stops */}
+          {route.stops?.map((stop, i) => (
+            <AdvancedMarker key={`stop-${stop.id || i}`} position={{ lat: stop.lat, lng: stop.lng }}>
+              {stop.id === targetStop.id ? (
+                <div className="relative flex flex-col items-center">
+                  <div
+                    className="absolute w-5 h-5 bg-blue-500 rounded-full"
+                    style={{ animation: "ripple 2s infinite" }}
+                  />
+                  <div className="w-5 h-5 bg-white border-4 border-brand-dark rounded-full z-10" />
+                  <span className="mt-2 px-3 py-1 bg-brand-surface border border-white/10 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest z-20 shadow-3xl">
+                    {stop.shortName}
+                  </span>
+                </div>
+              ) : (
+                <div className="relative flex flex-col items-center opacity-70 scale-75">
+                   <div className="flex items-center justify-center w-4 h-4 bg-white border-4 border-brand-dark rounded-full shadow-lg" />
+                   <span className="mt-1 px-2 py-0.5 bg-brand-dark/80 text-white rounded-[4px] text-[8px] whitespace-nowrap opacity-60 font-black uppercase tracking-widest">
+                    {stop.shortName}
+                  </span>
+                </div>
+              )}
+            </AdvancedMarker>
+          ))}
+
+          {!route.stops?.find(s => s.id === targetStop.id) && (
+            <AdvancedMarker position={targetStop}>
+              <div className="relative flex flex-col items-center">
+                <div
+                  className="absolute w-5 h-5 bg-blue-500 rounded-full"
+                  style={{ animation: "ripple 2s infinite" }}
+                />
+                <div className="w-5 h-5 bg-white border-4 border-brand-dark rounded-full z-10" />
+                <span className="mt-2 px-3 py-1 bg-brand-surface border border-white/10 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest z-20 shadow-3xl">
+                  {targetStop.shortName}
+                </span>
+              </div>
+            </AdvancedMarker>
+          )}
         </GoogleMap>
       </div>
 

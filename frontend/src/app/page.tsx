@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Bus, MapPin, Navigation, LayoutDashboard, Wifi, Star, Bell, ShieldCheck } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -77,10 +78,10 @@ export default function HomePage() {
           </div>
           <div style={{ display: "flex", alignItems: "center" }}>
             {[{ label: "Passenger", href: "/passenger" }, { label: "Driver", href: "/driver" }, { label: "Admin", href: "/admin" }].map(l => (
-              <a key={l.href} href={l.href} className="apple-nav-link">{l.label}</a>
+              <Link key={l.href} href={l.href} className="apple-nav-link">{l.label}</Link>
             ))}
           </div>
-          <a href="/passenger" className="cta-btn-primary" style={{ padding: "8px 18px", fontSize: 13 }}>Track My Bus</a>
+          <Link href="/passenger" className="cta-btn-primary" style={{ padding: "8px 18px", fontSize: 13 }}>Track My Bus</Link>
         </div>
       </nav>
 
@@ -96,13 +97,13 @@ export default function HomePage() {
           Real-time bus tracking, on-demand stops, and full fleet oversight. One ecosystem for passengers, drivers, and administrators.
         </p>
         <div style={{ display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
-          <a href="/passenger" className="cta-btn-primary">
+          <Link href="/passenger" className="cta-btn-primary">
             <MapPin style={{ width: 16, height: 16 }} />
             Passenger App
-          </a>
-          <a href="/driver" className="cta-btn-secondary" style={{ color: "#2997ff" }}>
+          </Link>
+          <Link href="/driver" className="cta-btn-secondary" style={{ color: "#2997ff" }}>
             Driver Console
-          </a>
+          </Link>
         </div>
       </section>
 
@@ -119,7 +120,7 @@ export default function HomePage() {
           {PORTALS.map((p) => {
             const Icon = p.icon;
             return (
-              <a key={p.href} href={p.href} className="portal-card">
+              <Link key={p.href} href={p.href} className="portal-card">
                 <div style={{ width: 48, height: 48, background: "#000000", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
                   <Icon style={{ width: 22, height: 22, color: "#ffffff" }} />
                 </div>
@@ -129,7 +130,7 @@ export default function HomePage() {
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#0071e3", fontSize: 15, fontWeight: 500, marginTop: 24 }}>
                   Open App <span style={{ fontSize: 20, lineHeight: 1 }}>›</span>
                 </span>
-              </a>
+              </Link>
             );
           })}
         </div>
@@ -184,10 +185,10 @@ export default function HomePage() {
           {PORTALS.map((p) => {
             const Icon = p.icon;
             return (
-              <a key={p.href} href={p.href} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#1d1d1f", color: "#f5f5f7", padding: "14px 28px", borderRadius: 980, fontSize: 15, fontWeight: 500, textDecoration: "none", transition: "background 0.2s" }}>
+              <Link key={p.href} href={p.href} style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#1d1d1f", color: "#f5f5f7", padding: "14px 28px", borderRadius: 980, fontSize: 15, fontWeight: 500, textDecoration: "none", transition: "background 0.2s" }}>
                 <Icon style={{ width: 16, height: 16 }} />
                 {p.label}
-              </a>
+              </Link>
             );
           })}
         </div>
@@ -199,7 +200,7 @@ export default function HomePage() {
           <p style={{ fontSize: 13, color: "#6e6e73" }}>Copyright © 2025 BusTrack. All rights reserved.</p>
           <div style={{ display: "flex", gap: 24 }}>
             {[{ label: "Passenger", href: "/passenger" }, { label: "Driver", href: "/driver" }, { label: "Admin", href: "/admin" }].map(l => (
-              <a key={l.href} href={l.href} style={{ fontSize: 13, color: "#6e6e73", textDecoration: "none" }}>{l.label}</a>
+              <Link key={l.href} href={l.href} style={{ fontSize: 13, color: "#6e6e73", textDecoration: "none" }}>{l.label}</Link>
             ))}
           </div>
         </div>
