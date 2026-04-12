@@ -127,7 +127,7 @@ export default function PassengerPage() {
          setShowFeedbackModal(true);
          trackingBusIdRef.current = null;
          trackingDriverIdRef.current = null;
-      }, 10000);
+      }, 1000);
     }
 
     return () => {

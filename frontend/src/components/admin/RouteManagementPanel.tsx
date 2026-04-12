@@ -60,6 +60,7 @@ export default function RouteManagementPanel() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [polylineBakeError, setPolylineBakeError] = useState<string | null>(null);
   const map = useMap();
+  const routesLib = useMapsLibrary("routes");
 
   const handlePlaceSelect = (place: google.maps.places.PlaceResult) => {
     if (!place.geometry?.location) return;
@@ -116,32 +117,37 @@ export default function RouteManagementPanel() {
       : newStops.map(s => ({ lat: s.lat, lng: s.lng }));
 
     let bakedPolyline: string | undefined;
-    try {
-      // ── Call the Next.js server-side proxy (/api/compute-polyline) ──
-      // The proxy attaches the admin secret server-side. The secret is NEVER
-      // sent to the browser or embedded in the client JS bundle.
-      const polyRes = await fetch(`/api/compute-polyline`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ waypoints: waypointsForBake }),
-      });
+    
+    if (routesLib && waypointsForBake.length >= 2) {
+      const directionsService = new routesLib.DirectionsService();
+      
+      const origin = waypointsForBake[0];
+      const destination = waypointsForBake[waypointsForBake.length - 1];
+      const waypoints = waypointsForBake.slice(1, -1).map(wp => ({
+        location: new google.maps.LatLng(wp.lat, wp.lng),
+        stopover: false
+      }));
 
-      if (!polyRes.ok) {
-        const errData = await polyRes.json().catch(() => ({})) as Record<string, string>;
-        throw new Error(errData.error || `HTTP ${polyRes.status}`);
+      try {
+        const result = await directionsService.route({
+          origin: new google.maps.LatLng(origin.lat, origin.lng),
+          destination: new google.maps.LatLng(destination.lat, destination.lng),
+          waypoints: waypoints,
+          travelMode: google.maps.TravelMode.DRIVING,
+        });
+
+        if (result.routes && result.routes.length > 0) {
+          bakedPolyline = result.routes[0].overview_polyline;
+        }
+      } catch (err: any) {
+        const msg = err instanceof Error ? err.message : (err?.message || "Google Routes API failed");
+        console.warn("⚠️ Polyline bake failed:", msg);
+        setPolylineBakeError(
+          `⚠️ Polyline bake failed (${msg}). Route saved with straight-line fallback.`
+        );
       }
-
-      const polyData = await polyRes.json() as { polyline: string };
-      bakedPolyline = polyData.polyline;
-    } catch (err) {
-      // Non-fatal — warn the admin clearly. Route saves, but shows as straight-line.
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      console.warn("⚠️ Polyline bake failed:", msg);
-      setPolylineBakeError(
-        `⚠️ Polyline bake failed (${msg}). Route saved with straight-line fallback. Re-bake it via the seed script.`
-      );
+    } else if (!routesLib) {
+      setPolylineBakeError("⚠️ Polyline bake failed (Routes API missing). Route saved with straight-line fallback.");
     }
 
     // ── Step 2: Save to Firestore (always, even if polyline bake failed) ──
