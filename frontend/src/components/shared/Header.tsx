@@ -6,9 +6,6 @@ import { Bus, LayoutDashboard, Compass, Map, User } from "lucide-react";
 
 const NAV_LINKS = [
   { href: "/", label: "Home", icon: Compass },
-  { href: "/passenger", label: "Passenger", icon: Map },
-  { href: "/driver", label: "Driver", icon: Bus },
-  { href: "/admin", label: "Admin", icon: LayoutDashboard },
 ];
 
 export default function Header() {
@@ -20,7 +17,7 @@ export default function Header() {
         {/* Brand Logo */}
         <Link href="/" className="flex items-center gap-4 group">
           <div className="w-32 h-32 flex items-center justify-center transition-transform group-hover:scale-110">
-            <img src="/BusLogo.png" alt="BusTrack Logo" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" />
+            <img src="/BusLogo.png" alt="BusTrack Logo" className="w-full h-full object-contain" />
           </div>
           <span className="font-display font-bold text-4xl tracking-tight text-white italic">
             Bus<span className="text-white/40">Track</span>
@@ -52,11 +49,6 @@ export default function Header() {
 
         {/* User / Action Area */}
         <div className="flex items-center gap-3">
-          <button className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-surface border border-white/5 text-xs font-semibold text-white/70 hover:text-white hover:bg-brand-muted transition-colors">
-            <User className="w-3.5 h-3.5" />
-            Sign In
-          </button>
-          
           <button className="md:hidden p-2 rounded-xl bg-white/5 text-white/50">
              <MenuIcon />
           </button>

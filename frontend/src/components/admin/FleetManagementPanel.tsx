@@ -22,6 +22,7 @@ export default function FleetManagementPanel() {
   const [newDriverId, setNewDriverId] = useState("");
   const [newDriverName, setNewDriverName] = useState("");
   const [newDriverBusId, setNewDriverBusId] = useState("");
+  const [newDriverRoutes, setNewDriverRoutes] = useState<string[]>([]);
 
   const handleAddBus = async () => {
     if (!newBusId || !newBusName) return;
@@ -58,11 +59,13 @@ export default function FleetManagementPanel() {
         id: newDriverId,
         name: newDriverName,
         assignedBusId: newDriverBusId || null,
+        assignedRoutes: newDriverRoutes,
       };
       await setDoc(doc(db, "drivers", newDriverId), driverData);
       setNewDriverId("");
       setNewDriverName("");
       setNewDriverBusId("");
+      setNewDriverRoutes([]);
     } catch (e: any) {
       console.error("Error adding driver", e);
       alert("Failed to add Operator: " + e.message);
@@ -80,9 +83,9 @@ export default function FleetManagementPanel() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex gap-8 p-8 mb-20 animate-slide-up">
+    <div className="w-full max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 md:gap-8 p-4 md:p-8 mb-20 animate-slide-up">
       {/* Buses Section */}
-      <div className="flex-1 bg-brand-surface/40 border border-white/5 shadow-3xl rounded-[2.5rem] p-8 flex flex-col">
+      <div className="flex-1 bg-brand-surface/40 border border-white/5 shadow-3xl rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-8 flex flex-col">
         <div className="flex items-center gap-3 mb-8">
           <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
             <Bus className="w-5 h-5 text-white/40" />
@@ -140,7 +143,7 @@ export default function FleetManagementPanel() {
       </div>
 
       {/* Drivers Section */}
-      <div className="flex-1 bg-brand-surface/40 border border-white/5 shadow-3xl rounded-[2.5rem] p-8 flex flex-col">
+      <div className="flex-1 bg-brand-surface/40 border border-white/5 shadow-3xl rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-8 flex flex-col">
         <div className="flex items-center gap-3 mb-8">
           <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
             <User className="w-5 h-5 text-white/40" />
@@ -170,7 +173,28 @@ export default function FleetManagementPanel() {
             <option value="">— Unassigned Vehicle —</option>
             {buses.map(b => <option key={b.id} value={b.id}>{b.name} ({b.id})</option>)}
           </select>
-          <button onClick={handleAddDriver} className="h-12 bg-white text-brand-dark rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
+
+          <div className="flex flex-col gap-2 mt-2">
+            <span className="text-[10px] text-white/40 uppercase tracking-[0.1em] font-bold">Assign Allowed Routes</span>
+            <div className="max-h-32 overflow-y-auto bg-white/5 border border-white/10 rounded-xl p-2 flex flex-col gap-1 shadow-inner">
+              {routes.map(r => (
+                <label key={r.id} className="flex items-center gap-3 px-3 py-2 hover:bg-white/5 rounded-lg cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="accent-white w-4 h-4"
+                    checked={newDriverRoutes.includes(r.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) setNewDriverRoutes([...newDriverRoutes, r.id]);
+                      else setNewDriverRoutes(newDriverRoutes.filter(id => id !== r.id));
+                    }}
+                  />
+                  <span className="text-sm font-bold text-white/80">{r.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <button onClick={handleAddDriver} className="h-12 bg-white text-brand-dark rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 mt-2">
             <Plus className="w-4 h-4" /> Add Operator
           </button>
         </div>
@@ -184,8 +208,13 @@ export default function FleetManagementPanel() {
                 <span className="font-bold text-white text-sm">{driver.name}</span>
                 <span className="text-[10px] text-white/30 font-mono tracking-widest">{driver.id}</span>
                 {driver.assignedBusId && (
-                  <span className="text-[10px] text-emerald-400 font-bold uppercase mt-1 tracking-widest flex items-center gap-1">
+                  <span className="text-[10px] text-blue-400 font-bold uppercase mt-2 tracking-widest flex items-center gap-1">
                     <ArrowRight className="w-3 h-3" /> Vehicle: {buses.find(b => b.id === driver.assignedBusId)?.name || driver.assignedBusId}
+                  </span>
+                )}
+                {driver.assignedRoutes && driver.assignedRoutes.length > 0 && (
+                  <span className="text-[10px] text-emerald-400 font-bold uppercase mt-1 tracking-widest flex items-center gap-1">
+                    <ArrowRight className="w-3 h-3" /> Routes: {driver.assignedRoutes.length} Assigned
                   </span>
                 )}
               </div>

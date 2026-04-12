@@ -12,12 +12,12 @@ interface Props {
   driverId: string;
   setDriverId: (id: string) => void;
   drivers: DriverData[];
-  selectedRouteId: string;
-  setSelectedRouteId: (id: string) => void;
+  selectedRouteIds: string[];
+  setSelectedRouteIds: (ids: string[]) => void;
   isTracking: boolean;
   onStartTracking: () => void;
   onStopTracking: () => void;
-  onRouteUpdate?: (routeId: string) => void;
+  onRouteUpdate?: (routeIds: string[]) => void;
 }
 
 export default function TransmitterControls({
@@ -25,8 +25,8 @@ export default function TransmitterControls({
   driverId,
   setDriverId,
   drivers,
-  selectedRouteId,
-  setSelectedRouteId,
+  selectedRouteIds,
+  setSelectedRouteIds,
   isTracking,
   onStartTracking,
   onStopTracking,
@@ -113,25 +113,55 @@ export default function TransmitterControls({
           </div>
         )}
 
-        {/* Path Selector */}
+        {/* Path Selector - Multi-select checkboxes */}
         <div className="space-y-3">
-          <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Active Assignment</label>
-          <div className="relative">
-            <select
-              value={selectedRouteId}
-              onChange={(e) => {
-                 const newId = e.target.value;
-                 setSelectedRouteId(newId);
-                 if (isTracking) onRouteUpdate?.(newId);
-              }}
-              className="w-full h-14 bg-brand-dark/40 border border-white/5 rounded-2xl px-6 py-2.5 text-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-white/10 appearance-none shadow-inner"
-            >
-              <option value="">— NO PATH ASSIGNED —</option>
-              {routes.map((r) => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 pointer-events-none" />
+          <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Active Routes ({selectedRouteIds.length} selected)</label>
+          <div className="bg-brand-dark/40 border border-white/5 rounded-2xl overflow-hidden shadow-inner">
+            {!driverId ? (
+              <p className="text-[10px] text-white/20 font-bold uppercase tracking-widest text-center py-4">Select an operator first</p>
+            ) : (() => {
+              const activeDriver = drivers.find(d => d.id === driverId);
+              const allowedRoutes = routes.filter(r => activeDriver?.assignedRoutes?.includes(r.id));
+              
+              if (allowedRoutes.length === 0) {
+                return <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest text-center py-4">No routes assigned to this operator</p>;
+              }
+
+              return allowedRoutes.map((r) => {
+                const isSelected = selectedRouteIds.includes(r.id);
+                return (
+                  <label
+                    key={r.id}
+                    className={`flex items-center gap-4 px-5 py-4 cursor-pointer border-b border-white/5 last:border-b-0 transition-all ${
+                      isSelected ? 'bg-white/5' : 'hover:bg-white/3'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+                      isSelected ? 'border-emerald-400 bg-emerald-500' : 'border-white/20 bg-transparent'
+                    }`}>
+                      {isSelected && <span className="text-white text-[10px] font-black">✓</span>}
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={isSelected}
+                      disabled={isTracking}
+                      onChange={() => {
+                        const newIds = isSelected
+                          ? selectedRouteIds.filter(id => id !== r.id)
+                          : [...selectedRouteIds, r.id];
+                        setSelectedRouteIds(newIds);
+                        if (isTracking) onRouteUpdate?.(newIds);
+                      }}
+                    />
+                    <div className="flex flex-col">
+                      <span className={`text-sm font-bold tracking-tight ${isSelected ? 'text-white' : 'text-white/40'}`}>{r.name}</span>
+                      <span className="text-[9px] font-mono text-white/20 tracking-widest">{r.id}</span>
+                    </div>
+                  </label>
+                );
+              });
+            })()}
           </div>
         </div>
         
@@ -140,7 +170,7 @@ export default function TransmitterControls({
           {!isTracking ? (
             <button
               onClick={onStartTracking}
-              disabled={!busId || !driverId || !selectedRouteId}
+              disabled={!busId || !driverId || selectedRouteIds.length === 0}
               className="w-full py-5 rounded-[1.5rem] bg-white text-brand-dark font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-3xl flex items-center justify-center gap-3 tracking-[0.1em] disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Play className="w-4 h-4 fill-brand-dark" />
@@ -168,8 +198,8 @@ export default function TransmitterControls({
              </div>
              <div className="flex items-center gap-2">
                 <MapPin className="w-3.5 h-3.5 text-white/20" />
-                <span className="text-sm font-bold text-white tracking-tight truncate max-w-[200px]">
-                  {routes.find(r => r.id === selectedRouteId)?.name || "SYSTEM OVERRIDE"}
+                <span className="text-sm font-bold text-white tracking-tight">
+                  {selectedRouteIds.length} Route{selectedRouteIds.length !== 1 ? 's' : ''} Active
                 </span>
              </div>
           </div>

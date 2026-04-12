@@ -6,6 +6,7 @@ export interface DriverData {
   id: string; // Driver unique ID e.g. "drv_1"
   name: string; // Driver display name e.g. "Ravi Kumar"
   assignedBusId: string | null; // Bus they are driving today
+  assignedRoutes?: string[]; // Routes this driver is allowed to broadcast
 }
 
 export function useDrivers() {

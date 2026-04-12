@@ -118,11 +118,9 @@ export default function MessagingPanel({
                 key={msg.id} 
                 className={`flex flex-col max-w-[85%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}
               >
-                {!isMe && (
-                  <span className="text-[9px] text-white/30 font-bold uppercase tracking-widest mb-1 px-1">
-                    {msg.senderName}
-                  </span>
-                )}
+                <span className={`text-[9px] font-bold uppercase tracking-widest mb-1 px-1 ${isMe ? 'text-emerald-400/60' : 'text-white/30'}`}>
+                  {isMe ? 'You' : msg.senderName}
+                </span>
                 <div 
                   className={`px-4 py-2.5 rounded-2xl ${
                     isMe 

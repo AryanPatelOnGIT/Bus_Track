@@ -31,7 +31,7 @@ export default function PassengerPage() {
   const { routes } = useRoutes();
   const [selectedRouteId, setSelectedRouteId] = useState("");
   const [selectedStopId, setSelectedStopId] = useState("");
-  const [activeBuses, setActiveBuses] = useState<Map<string, string>>(new Map());
+  const [activeBuses, setActiveBuses] = useState<{busId: string, routeId: string}[]>([]);
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackBusId, setFeedbackBusId] = useState("");
@@ -47,14 +47,14 @@ export default function PassengerPage() {
 
     const handleSnapshot = onValue(busesRef, (snapshot) => {
       const data = snapshot.val();
-      const newMap = new Map<string, string>();
+      const newBuses: {busId: string, routeId: string}[] = [];
       const driverMap = new Map<string, string>();
       if (data) {
         Object.values(data as Record<string, ActiveBusData & { driverId?: string }>).forEach((bus) => {
           // 5 minute buffer to avoid mobile clock drift hiding buses. OnDisconnect handles real disconnects.
           const isFresh = Date.now() - bus.timestamp < 300000; 
           if (bus.routeId && bus.busId && bus.status === "active" && isFresh) {
-            newMap.set(bus.busId, bus.routeId);
+            newBuses.push({ busId: bus.busId, routeId: bus.routeId });
             if (bus.driverId) {
               driverMap.set(bus.busId, bus.driverId);
             }
@@ -62,13 +62,13 @@ export default function PassengerPage() {
         });
       }
       latestBusDriversRef.current = driverMap;
-      setActiveBuses(newMap);
+      setActiveBuses(newBuses);
     });
 
     return () => off(busesRef, "value", handleSnapshot);
   }, []);
 
-  const activeRouteIds = Array.from(new Set(activeBuses.values()));
+  const activeRouteIds = Array.from(new Set(activeBuses.map(b => b.routeId)));
   const activeRouteIdsStr = activeRouteIds.sort().join(',');
 
   useEffect(() => {
@@ -110,7 +110,7 @@ export default function PassengerPage() {
         shortName: "LIVE"
       }));
 
-  const activeBusOnRoute = Array.from(activeBuses.keys()).find(id => activeBuses.get(id) === selectedRouteId);
+  const activeBusOnRoute = activeBuses.find(b => b.routeId === selectedRouteId)?.busId;
 
   useEffect(() => {
     let timerId: NodeJS.Timeout;
@@ -202,7 +202,7 @@ export default function PassengerPage() {
               {isMessagingOpen && (
                 <div className="absolute inset-x-0 bottom-0 top-32 z-50 animate-slide-up">
                   <MessagingPanel
-                    busId={Array.from(activeBuses.keys()).find(id => activeBuses.get(id) === activeRoute.id) || ""}
+                    busId={activeBuses.find(b => b.routeId === activeRoute.id)?.busId || ""}
                     currentUserRole="passenger"
                     currentUserId={user?.uid || "anonymous"}
                     currentUserName={user?.displayName || "Rider"}

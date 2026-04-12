@@ -187,9 +187,9 @@ export default function RouteManagementPanel() {
   };
 
   return (
-    <div className="flex w-full h-[800px] bg-brand-dark/20 rounded-[2.5rem] overflow-hidden border border-white/5 shadow-3xl mx-auto max-w-7xl mt-8 mb-20">
+    <div className="flex flex-col lg:flex-row w-full min-h-[auto] lg:h-[800px] bg-brand-dark/20 md:rounded-[2.5rem] overflow-hidden border border-white/5 shadow-3xl mx-auto max-w-7xl mt-4 md:mt-8 mb-20">
       {/* Sidebar - Route List */}
-      <div className="w-[380px] border-r border-white/5 flex flex-col bg-brand-surface/40 overflow-y-auto">
+      <div className={`w-full lg:w-[380px] border-b lg:border-b-0 lg:border-r border-white/5 bg-brand-surface/40 overflow-y-auto max-h-[400px] lg:max-h-none ${isCreating ? "hidden lg:flex" : "flex flex-col"}`}>
         <div className="p-8 border-b border-white/5 flex items-center justify-between sticky top-0 bg-brand-surface/90 backdrop-blur-xl z-20">
           <h2 className="font-bold text-xl tracking-tight" style={{ fontFamily: "Outfit" }}>Infrastructure</h2>
           <button 
@@ -246,9 +246,9 @@ export default function RouteManagementPanel() {
         ) : (
           <div className="flex flex-col h-full">
             {/* Editor Toolbar */}
-            <div className="p-6 border-b border-white/5 bg-brand-surface/90 backdrop-blur-2xl flex flex-col gap-6 z-10 shadow-lg">
-               <div className="flex gap-6 items-end w-full">
-                <div className="flex flex-col gap-2 flex-1">
+            <div className="p-4 md:p-6 border-b border-white/5 bg-brand-surface/90 backdrop-blur-2xl flex flex-col gap-4 md:gap-6 z-10 shadow-lg">
+               <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-start md:items-end w-full">
+                <div className="flex flex-col gap-2 w-full md:flex-1">
                   <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Route ID</label>
                   <input 
                     type="text" 
@@ -258,7 +258,7 @@ export default function RouteManagementPanel() {
                     className="h-12 bg-brand-dark border border-white/10 rounded-2xl px-5 text-sm text-white focus:outline-none focus:border-white transition-colors placeholder:text-white/10 font-bold"
                   />
                 </div>
-                <div className="flex flex-col gap-2 flex-[2]">
+                <div className="flex flex-col gap-2 w-full md:flex-[2]">
                   <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Display Name</label>
                   <input 
                     type="text" 
@@ -268,7 +268,7 @@ export default function RouteManagementPanel() {
                     className="h-12 bg-brand-dark border border-white/10 rounded-2xl px-5 text-sm text-white focus:outline-none focus:border-white transition-colors placeholder:text-white/10 font-bold"
                   />
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 w-full md:w-auto">
                   <button 
                     onClick={handleSaveRoute} 
                     disabled={isSaving || newStops.length < 2}
@@ -289,10 +289,10 @@ export default function RouteManagementPanel() {
                 </div>
                </div>
 
-               <div className="flex items-center gap-4 w-full">
+               <div className="flex flex-col md:flex-row items-center gap-4 w-full">
                   <SearchBox onPlaceSelect={handlePlaceSelect} />
-                  <div className="h-12 w-px bg-white/5" />
-                  <div className="text-[10px] text-white/20 font-black uppercase tracking-widest leading-tight">
+                  <div className="hidden md:block h-12 w-px bg-white/5" />
+                  <div className="text-[10px] text-white/20 font-black uppercase tracking-widest leading-tight text-center md:text-left w-full md:w-auto">
                     Search keywords to find stops<br/>or click map for path nodes
                   </div>
                </div>
@@ -319,8 +319,8 @@ export default function RouteManagementPanel() {
             )}
 
             {/* Editor Body */}
-            <div className="flex-1 flex relative">
-               <div className="flex-1 relative">
+            <div className="flex-1 flex flex-col lg:flex-row relative min-h-[500px]">
+               <div className="flex-1 relative min-h-[300px] lg:min-h-0">
                  <GoogleMap
                     defaultCenter={{ lat: 23.0347, lng: 72.5483 }}
                     defaultZoom={13}
@@ -354,7 +354,7 @@ export default function RouteManagementPanel() {
                </div>
 
                {/* Sequence Sidebar */}
-               <div className="w-[360px] border-l border-white/5 bg-brand-surface/30 backdrop-blur-2xl flex flex-col overflow-hidden">
+               <div className="w-full lg:w-[360px] h-[300px] lg:h-auto border-t lg:border-t-0 lg:border-l border-white/5 bg-brand-surface/30 backdrop-blur-2xl flex flex-col overflow-hidden">
                  <div className="flex flex-col h-full">
                     {/* Stops List */}
                     <div className="flex-1 flex flex-col min-h-0 border-b border-white/5">

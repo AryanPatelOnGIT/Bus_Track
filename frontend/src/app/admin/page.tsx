@@ -27,7 +27,7 @@ export default function AdminPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-4 md:mt-0">
             <button 
               onClick={() => setActiveTab("routes")}
               className={`flex px-6 py-3 rounded-2xl border transition-all w-fit items-center gap-3 ${activeTab === 'routes' ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent hover:bg-white/5'}`}

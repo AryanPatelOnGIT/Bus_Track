@@ -37,7 +37,7 @@ export default function DriverPage() {
   const activeDriver = drivers.find(d => d.id === driverId);
   const busId = activeDriver?.assignedBusId || "";
   
-  const [selectedRouteId, setSelectedRouteId] = useState("");
+  const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
   const [isTracking, setIsTracking] = useState(false);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number; heading: number } | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("map");
@@ -46,12 +46,14 @@ export default function DriverPage() {
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (routes.length > 0 && !selectedRouteId) {
-      setSelectedRouteId(routes[0].id);
+    // Auto-select first route when routes load
+    if (routes.length > 0 && selectedRouteIds.length === 0) {
+      setSelectedRouteIds([routes[0].id]);
     }
-  }, [routes, selectedRouteId]);
+  }, [routes]);
 
-  const activeRoute = routes.find(r => r.id === selectedRouteId);
+  // For the map, show the first selected route
+  const activeRoute = routes.find(r => selectedRouteIds.includes(r.id)) || routes.find(r => r.id === selectedRouteIds[0]);
 
   useEffect(() => {
     import("socket.io-client").then(({ io }) => {
@@ -75,26 +77,26 @@ export default function DriverPage() {
     socketRef.current?.emit("driver:start-tracking", {
       busId,
       driverId: driverId,
-      routeId: selectedRouteId
+      routeIds: selectedRouteIds
     });
 
     const writeToFirebase = (loc: { lat: number; lng: number; heading: number; speed: number }) => {
-      // Write directly to Firebase Realtime Database
-      const busRef = ref(rtdb, `activeBuses/${busId}`);
-      // If the driver closes the app/loses connection, remove the bus automatically
-      onDisconnect(busRef).remove().catch(() => {});
-      
-      set(busRef, {
-        busId,
-        driverId: driverId,
-        routeId: selectedRouteId,
-        lat: loc.lat,
-        lng: loc.lng,
-        heading: loc.heading,
-        speed: loc.speed,
-        status: "active",
-        timestamp: Date.now(),
-      }).catch(console.error);
+      // Write one entry per selected route so passengers on any of these routes can see the bus
+      selectedRouteIds.forEach((routeId) => {
+        const busRef = ref(rtdb, `activeBuses/${busId}_${routeId}`);
+        onDisconnect(busRef).remove().catch(() => {});
+        set(busRef, {
+          busId,
+          driverId: driverId,
+          routeId,
+          lat: loc.lat,
+          lng: loc.lng,
+          heading: loc.heading,
+          speed: loc.speed,
+          status: "active",
+          timestamp: Date.now(),
+        }).catch(console.error);
+      });
     };
 
     const updateLocation = () => {
@@ -137,14 +139,16 @@ export default function DriverPage() {
 
     updateLocation();
     intervalIdRef.current = setInterval(updateLocation, 3000);
-  }, [busId, selectedRouteId]);
+  }, [busId, selectedRouteIds]);
 
   const handleStopTracking = useCallback(() => {
     setIsTracking(false);
-    // Remove from Firebase Realtime DB so passengers see bus as gone
-    const busRef = ref(rtdb, `activeBuses/${busId}`);
-    remove(busRef).catch(console.error);
-    onDisconnect(busRef).cancel(); // Ensure we don't accidentally remove a future session
+    // Remove all route entries for this bus from Firebase
+    selectedRouteIds.forEach((routeId) => {
+      const busRef = ref(rtdb, `activeBuses/${busId}_${routeId}`);
+      remove(busRef).catch(console.error);
+      onDisconnect(busRef).cancel();
+    });
     
     socketRef.current?.emit("driver:stop-tracking", { busId });
     if (intervalIdRef.current) {
@@ -152,11 +156,11 @@ export default function DriverPage() {
       intervalIdRef.current = null;
     }
     setDriverLocation(null);
-  }, [busId]);
+  }, [busId, selectedRouteIds]);
 
-  const handleRouteUpdate = useCallback((routeId: string) => {
+  const handleRouteUpdate = useCallback((routeIds: string[]) => {
     if (socketRef.current && busId) {
-      socketRef.current.emit("driver:route-update", { busId, routeId });
+      socketRef.current.emit("driver:route-update", { busId, routeIds });
     }
   }, [busId]);
 
@@ -170,7 +174,6 @@ export default function DriverPage() {
             {activeRoute && (
               <DriverMap 
                 route={activeRoute} 
-                targetStop={activeRoute.stops?.[1] || activeRoute.stops?.[0]} 
                 driverLocation={driverLocation}
                 socketRef={socketRef as any}
                 busId={busId}
@@ -184,8 +187,8 @@ export default function DriverPage() {
               driverId={driverId}
               setDriverId={setDriverId}
               drivers={drivers}
-              selectedRouteId={selectedRouteId}
-              setSelectedRouteId={setSelectedRouteId}
+              selectedRouteIds={selectedRouteIds}
+              setSelectedRouteIds={setSelectedRouteIds}
               isTracking={isTracking}
               onStartTracking={handleStartTracking}
               onStopTracking={handleStopTracking}

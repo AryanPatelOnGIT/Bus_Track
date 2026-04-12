@@ -64,3 +64,9 @@ list-*.ts
 # Media & Storage
 artifacts/
 temp/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
