@@ -43,7 +43,7 @@ function SearchBox({ onPlaceSelect }: SearchBoxProps) {
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         placeholder="Search for a stop (e.g. Navrangpura)"
-        className="w-full h-12 bg-brand-dark border border-white/10 rounded-2xl pl-11 pr-5 text-sm text-white focus:outline-none focus:border-white transition-colors placeholder:text-white/10 font-bold"
+        className="w-full h-10 bg-brand-dark border border-white/10 rounded-xl pl-11 pr-5 text-sm text-white focus:outline-none focus:border-white transition-colors placeholder:text-white/10 font-bold"
       />
     </div>
   );
@@ -187,10 +187,10 @@ export default function RouteManagementPanel() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row w-full min-h-[auto] lg:h-[800px] bg-brand-dark/20 md:rounded-[2.5rem] overflow-hidden border border-white/5 shadow-3xl mx-auto max-w-7xl mt-4 md:mt-8 mb-20">
+    <div className="flex flex-col lg:flex-row w-full min-h-[auto] lg:h-[600px] bg-brand-dark/20 md:rounded-[2.5rem] overflow-hidden border border-white/5 shadow-3xl mx-auto max-w-7xl mt-2 md:mt-4 mb-10">
       {/* Sidebar - Route List */}
-      <div className={`w-full lg:w-[380px] border-b lg:border-b-0 lg:border-r border-white/5 bg-brand-surface/40 overflow-y-auto max-h-[400px] lg:max-h-none ${isCreating ? "hidden lg:flex" : "flex flex-col"}`}>
-        <div className="p-8 border-b border-white/5 flex items-center justify-between sticky top-0 bg-brand-surface/90 backdrop-blur-xl z-20">
+      <div className={`w-full border-white/5 bg-brand-surface/40 overflow-y-auto max-h-[400px] lg:max-h-none ${isCreating ? "lg:w-[320px] border-b lg:border-b-0 lg:border-r hidden lg:flex flex-col" : "lg:flex-1 lg:max-w-3xl lg:mx-auto border-b lg:border-none flex flex-col"}`}>
+        <div className="p-4 border-b border-white/5 flex items-center justify-between sticky top-0 bg-brand-surface/90 backdrop-blur-xl z-20">
           <h2 className="font-bold text-xl tracking-tight" style={{ fontFamily: "Outfit" }}>Infrastructure</h2>
           <button 
             onClick={() => setIsCreating(true)}
@@ -200,17 +200,17 @@ export default function RouteManagementPanel() {
           </button>
         </div>
 
-        <div className="p-6 flex flex-col gap-4">
+        <div className="p-4 flex flex-col gap-2">
           {loading ? (
-             <div className="flex flex-col items-center justify-center py-20 text-white/20">
+             <div className="flex flex-col items-center justify-center py-10 text-white/20">
                <Loader2 className="w-6 h-6 animate-spin mb-4" />
                <span className="text-[10px] font-bold uppercase tracking-widest">Querying routes...</span>
              </div>
           ) : routes.length === 0 ? (
-            <div className="text-white/30 text-xs font-bold text-center py-20 uppercase tracking-widest">No active routes.</div>
+            <div className="text-white/30 text-xs font-bold text-center py-10 uppercase tracking-widest">No active routes.</div>
           ) : (
             routes.map(route => (
-              <div key={route.id} className="group bg-brand-dark/30 border border-white/5 rounded-[1.5rem] p-6 flex flex-col gap-3 hover:bg-white/5 transition-all duration-300">
+              <div key={route.id} className="group bg-brand-dark/30 border border-white/5 rounded-[1.2rem] p-4 flex flex-col gap-2 hover:bg-white/5 transition-all duration-300">
                 <div className="flex justify-between items-start">
                    <div className="space-y-1">
                     <h3 className="font-bold text-white tracking-tight group-hover:text-white transition-colors">{route.name}</h3>
@@ -235,19 +235,12 @@ export default function RouteManagementPanel() {
       </div>
 
       {/* Main Content Area - Editor */}
-      <div className="flex-1 flex flex-col relative bg-brand-dark/40">
-        {!isCreating ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-white/20 text-center p-12">
-            <div className="w-20 h-20 rounded-[2rem] bg-white/5 flex items-center justify-center mb-8">
-               <Navigation2 className="w-8 h-8 text-white/10" />
-            </div>
-            <p className="text-sm font-bold uppercase tracking-[0.2em]">Select &apos;ADD&apos; to initialize new route geometry</p>
-          </div>
-        ) : (
+      {isCreating && (
+        <div className="flex-1 flex flex-col relative bg-brand-dark/40">
           <div className="flex flex-col h-full">
             {/* Editor Toolbar */}
-            <div className="p-4 md:p-6 border-b border-white/5 bg-brand-surface/90 backdrop-blur-2xl flex flex-col gap-4 md:gap-6 z-10 shadow-lg">
-               <div className="flex flex-col md:flex-row gap-4 md:gap-6 items-start md:items-end w-full">
+            <div className="p-3 md:p-4 border-b border-white/5 bg-brand-surface/90 backdrop-blur-2xl flex flex-col gap-3 z-10 shadow-lg">
+               <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-start md:items-end w-full">
                 <div className="flex flex-col gap-2 w-full md:flex-1">
                   <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Route ID</label>
                   <input 
@@ -255,7 +248,7 @@ export default function RouteManagementPanel() {
                     value={newRouteId} 
                     onChange={(e) => setNewRouteId(e.target.value)} 
                     placeholder="e.g. route_101"
-                    className="h-12 bg-brand-dark border border-white/10 rounded-2xl px-5 text-sm text-white focus:outline-none focus:border-white transition-colors placeholder:text-white/10 font-bold"
+                    className="h-10 bg-brand-dark border border-white/10 rounded-xl px-4 text-sm text-white focus:outline-none focus:border-white transition-colors placeholder:text-white/10 font-bold"
                   />
                 </div>
                 <div className="flex flex-col gap-2 w-full md:flex-[2]">
@@ -265,14 +258,14 @@ export default function RouteManagementPanel() {
                     value={newRouteName} 
                     onChange={(e) => setNewRouteName(e.target.value)} 
                     placeholder="e.g. Downtown Express"
-                    className="h-12 bg-brand-dark border border-white/10 rounded-2xl px-5 text-sm text-white focus:outline-none focus:border-white transition-colors placeholder:text-white/10 font-bold"
+                    className="h-10 bg-brand-dark border border-white/10 rounded-xl px-4 text-sm text-white focus:outline-none focus:border-white transition-colors placeholder:text-white/10 font-bold"
                   />
                 </div>
                 <div className="flex gap-3 w-full md:w-auto">
                   <button 
                     onClick={handleSaveRoute} 
                     disabled={isSaving || newStops.length < 2}
-                    className="h-12 px-8 rounded-2xl bg-white text-brand-dark font-black transition disabled:opacity-20 disabled:cursor-not-allowed shadow-2xl text-xs uppercase tracking-[0.15em] flex items-center gap-2"
+                    className="h-10 px-6 rounded-xl bg-white text-brand-dark font-black transition disabled:opacity-20 disabled:cursor-not-allowed shadow-2xl text-xs uppercase tracking-[0.15em] flex items-center gap-2"
                   >
                     {isSaving ? (
                       <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Baking...</>
@@ -282,16 +275,16 @@ export default function RouteManagementPanel() {
                   </button>
                   <button 
                     onClick={() => setIsCreating(false)}
-                    className="h-12 px-6 rounded-2xl border border-white/5 text-white/40 hover:text-white transition-all text-xs font-black uppercase tracking-widest"
+                    className="h-10 px-5 rounded-xl border border-white/5 text-white/40 hover:text-white transition-all text-xs font-black uppercase tracking-widest"
                   >
                     Cancel
                   </button>
                 </div>
                </div>
 
-               <div className="flex flex-col md:flex-row items-center gap-4 w-full">
+               <div className="flex flex-col md:flex-row items-center gap-3 w-full">
                   <SearchBox onPlaceSelect={handlePlaceSelect} />
-                  <div className="hidden md:block h-12 w-px bg-white/5" />
+                  <div className="hidden md:block h-10 w-px bg-white/5" />
                   <div className="text-[10px] text-white/20 font-black uppercase tracking-widest leading-tight text-center md:text-left w-full md:w-auto">
                     Search keywords to find stops<br/>or click map for path nodes
                   </div>
@@ -432,11 +425,11 @@ export default function RouteManagementPanel() {
                       </div>
                     </div>
                  </div>
-               </div>
-            </div>
+                </div>
+             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

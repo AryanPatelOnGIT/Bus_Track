@@ -150,13 +150,13 @@ export default function PassengerPage() {
                       setSelectedRouteId(e.target.value);
                       buzzController.unlock();
                     }}
-                    className="w-full h-14 backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl px-6 text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight"
+                    className="w-full h-14 backdrop-blur-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-6 text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight transition-all cursor-pointer"
                   >
                     {availableRoutes.map((r) => (
-                      <option key={r.id} value={r.id} className="bg-brand-dark">{r.name}</option>
+                      <option key={r.id} value={r.id} className="bg-[#1a1c29] text-white">Route: {r.name}</option>
                     ))}
                   </select>
-                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-30">
+                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-white/30 group-hover:text-white/60 transition-colors">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                       <path d="M6 9l6 6 6-6" />
                     </svg>
@@ -171,13 +171,13 @@ export default function PassengerPage() {
                         setSelectedStopId(e.target.value);
                         buzzController.unlock();
                       }}
-                      className="w-full h-12 backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl px-6 text-white text-xs focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight"
+                      className="w-full h-12 backdrop-blur-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-6 text-white text-xs focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight transition-all cursor-pointer"
                     >
                       {activeRoute.stops.map((s) => (
-                        <option key={s.id} value={s.id} className="bg-brand-dark">Alight at: {s.name}</option>
+                        <option key={s.id} value={s.id} className="bg-[#1a1c29] text-white">Alight at: {s.name}</option>
                       ))}
                     </select>
-                    <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-30">
+                    <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-white/30 group-hover:text-white/60 transition-colors">
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                         <path d="M6 9l6 6 6-6" />
                       </svg>

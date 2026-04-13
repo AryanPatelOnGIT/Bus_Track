@@ -15,22 +15,18 @@ export default function AdminPage() {
       <Header />
 
       {/* Admin Sub-header */}
-      <div className="bg-brand-surface/40 border-b border-white/5 py-12 px-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-brand-surface/40 border-b border-white/5 py-6 px-6">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-2 text-white/40 text-xs font-bold uppercase tracking-widest">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Secure Infrastructure Control
-            </div>
             <h1 className="text-4xl font-bold tracking-tight" style={{ fontFamily: "Outfit" }}>
-              Fleet <span className="text-white/40">Control Center</span>
+              Admin Panel
             </h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-4 md:mt-0">
             <button 
               onClick={() => setActiveTab("routes")}
-              className={`flex px-6 py-3 rounded-2xl border transition-all w-fit items-center gap-3 ${activeTab === 'routes' ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent hover:bg-white/5'}`}
+              className={`flex px-4 py-2 rounded-xl border transition-all w-fit items-center gap-2 ${activeTab === 'routes' ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent hover:bg-white/5'}`}
             >
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-lg transition-colors ${activeTab === 'routes' ? 'bg-white text-brand-dark' : 'bg-white/10 text-white/40'}`}>
                   <MapIcon className="w-4 h-4" />
@@ -43,7 +39,7 @@ export default function AdminPage() {
             
             <button 
               onClick={() => setActiveTab("fleet")}
-              className={`flex px-6 py-3 rounded-2xl border transition-all w-fit items-center gap-3 ${activeTab === 'fleet' ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent hover:bg-white/5'}`}
+              className={`flex px-4 py-2 rounded-xl border transition-all w-fit items-center gap-2 ${activeTab === 'fleet' ? 'bg-white/10 border-white/20' : 'bg-transparent border-transparent hover:bg-white/5'}`}
             >
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-lg transition-colors ${activeTab === 'fleet' ? 'bg-white text-brand-dark' : 'bg-white/10 text-white/40'}`}>
                   <Users className="w-4 h-4" />

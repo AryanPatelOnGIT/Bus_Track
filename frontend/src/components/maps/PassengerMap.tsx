@@ -47,9 +47,9 @@ const INTERPOLATION_MS = 1600;
 
 const RIPPLE_KEYFRAMES = `
   @keyframes ripple {
-    0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
-    70% { box-shadow: 0 0 0 30px rgba(59, 130, 246, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.5); }
+    70% { box-shadow: 0 0 0 30px rgba(249, 115, 22, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
   }
 `;
 
@@ -333,14 +333,14 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
                   {stop.shortName}
                 </span>
                 <div
-                  className="absolute w-6 h-6 bg-white/20 rounded-full"
+                  className="absolute w-6 h-6 bg-orange-500/20 rounded-full"
                   style={{ animation: "ripple 2s infinite" }}
                 />
-                <div className="flex items-center justify-center w-6 h-6 bg-white border-4 border-brand-dark rounded-full z-10 shadow-3xl" />
+                <div className="flex items-center justify-center w-6 h-6 bg-orange-500 border-4 border-brand-dark rounded-full z-10 shadow-3xl" />
               </div>
             ) : (
               <div className="relative flex flex-col items-center opacity-70 scale-75">
-                 <div className="flex items-center justify-center w-4 h-4 bg-white border-4 border-brand-dark rounded-full shadow-lg" />
+                 <div className="flex items-center justify-center w-4 h-4 bg-orange-500 border-4 border-brand-dark rounded-full shadow-lg" />
                  <span className="mt-1 px-2 py-0.5 bg-brand-dark/80 text-white rounded-[4px] text-[8px] whitespace-nowrap opacity-60 font-black uppercase tracking-widest">
                   {stop.shortName}
                 </span>
@@ -357,10 +357,10 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
                 {targetStop.shortName}
               </span>
               <div
-                className="absolute w-6 h-6 bg-white/20 rounded-full"
+                className="absolute w-6 h-6 bg-orange-500/20 rounded-full"
                 style={{ animation: "ripple 2s infinite" }}
               />
-              <div className="flex items-center justify-center w-6 h-6 bg-white border-4 border-brand-dark rounded-full z-10 shadow-3xl" />
+              <div className="flex items-center justify-center w-6 h-6 bg-orange-500 border-4 border-brand-dark rounded-full z-10 shadow-3xl" />
             </div>
           </AdvancedMarker>
         )}

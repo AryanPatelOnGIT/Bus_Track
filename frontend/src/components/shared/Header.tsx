@@ -4,9 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bus, LayoutDashboard, Compass, Map, User } from "lucide-react";
 
-const NAV_LINKS = [
-  { href: "/", label: "Home", icon: Compass },
-];
+const NAV_LINKS: {href: string, label: string, icon: any}[] = [];
 
 export default function Header() {
   const pathname = usePathname(); 
@@ -47,23 +45,9 @@ export default function Header() {
           })}
         </nav>
 
-        {/* User / Action Area */}
-        <div className="flex items-center gap-3">
-          <button className="md:hidden p-2 rounded-xl bg-white/5 text-white/50">
-             <MenuIcon />
-          </button>
-        </div>
       </div>
     </header>
   );
 }
 
-function MenuIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <line x1="3" y1="12" x2="21" y2="12"></line>
-      <line x1="3" y1="6" x2="21" y2="6"></line>
-      <line x1="3" y1="18" x2="21" y2="18"></line>
-    </svg>
-  );
-}
+

@@ -97,25 +97,25 @@ export default function TransmitterControls({
         {!isTracking && (
           <div className="space-y-3">
             <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Operator Identity</label>
-            <div className="relative">
+            <div className="relative group">
               <select
                 value={driverId}
                 onChange={(e) => setDriverId(e.target.value)}
-                className="w-full h-14 bg-brand-dark/40 border border-white/5 rounded-2xl px-6 py-2.5 text-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-white/10 appearance-none shadow-inner"
+                className="w-full h-14 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-6 py-2.5 text-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-white/20 appearance-none shadow-2xl transition-all cursor-pointer"
               >
-                <option value="">— SELECT PROfILE —</option>
+                <option value="" className="bg-[#1a1c29] text-white min-h-[40px]">— SELECT OPERATOR —</option>
                 {drivers.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name} ({d.id})</option>
+                  <option key={d.id} value={d.id} className="bg-[#1a1c29] text-white min-h-[40px]">{d.name} ({d.id})</option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 pointer-events-none" />
+              <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 group-hover:text-white/60 transition-colors pointer-events-none" />
             </div>
           </div>
         )}
 
-        {/* Path Selector - Multi-select checkboxes */}
+        {/* Path Selector - Single Select */}
         <div className="space-y-3">
-          <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Active Routes ({selectedRouteIds.length} selected)</label>
+          <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Active Route ({selectedRouteIds.length > 0 ? 1 : 0} selected)</label>
           <div className="bg-brand-dark/40 border border-white/5 rounded-2xl overflow-hidden shadow-inner">
             {!driverId ? (
               <p className="text-[10px] text-white/20 font-bold uppercase tracking-widest text-center py-4">Select an operator first</p>
@@ -136,22 +136,20 @@ export default function TransmitterControls({
                       isSelected ? 'bg-white/5' : 'hover:bg-white/3'
                     }`}
                   >
-                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
-                      isSelected ? 'border-emerald-400 bg-emerald-500' : 'border-white/20 bg-transparent'
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+                      isSelected ? 'border-emerald-400 bg-emerald-500/20' : 'border-white/20 bg-transparent'
                     }`}>
-                      {isSelected && <span className="text-white text-[10px] font-black">✓</span>}
+                      {isSelected && <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full" />}
                     </div>
                     <input
-                      type="checkbox"
+                      type="radio"
+                      name="transmitterRoute"
                       className="sr-only"
                       checked={isSelected}
                       disabled={isTracking}
                       onChange={() => {
-                        const newIds = isSelected
-                          ? selectedRouteIds.filter(id => id !== r.id)
-                          : [...selectedRouteIds, r.id];
-                        setSelectedRouteIds(newIds);
-                        if (isTracking) onRouteUpdate?.(newIds);
+                        setSelectedRouteIds([r.id]);
+                        if (isTracking) onRouteUpdate?.([r.id]);
                       }}
                     />
                     <div className="flex flex-col">

@@ -41,7 +41,6 @@ export default function SimulateDriverPage() {
           socketRef={socketRef as any}
           busId={busId}
           route={BRTS_ROUTES[0]}
-          targetStop={BRTS_ROUTES[0].stops[1]}
           driverLocation={sim.currentPosition ? { ...sim.currentPosition, heading: sim.heading } : null}
         />
       </div>
