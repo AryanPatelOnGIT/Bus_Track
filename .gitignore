@@ -44,6 +44,8 @@ service-account.json
 !package.json
 !tsconfig.json
 !*config.json
+!firebase.json
+!database.rules.json
 
 # Misc
 .DS_Store

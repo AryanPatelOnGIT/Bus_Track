@@ -102,17 +102,7 @@ export default function DriverProfileTab({ driverId, busId }: Props) {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-6">
-          <div className="bg-brand-surface border border-white/5 rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-2xl transition-transform hover:scale-[1.02]">
-            <span className="text-white/20 text-[10px] font-black uppercase tracking-widest mb-2">Total Hours</span>
-            <span className="text-3xl font-bold text-white tracking-tighter">42.5h</span>
-          </div>
-          <div className="bg-brand-surface border border-white/5 rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-2xl transition-transform hover:scale-[1.02]">
-            <span className="text-white/20 text-[10px] font-black uppercase tracking-widest mb-2">Trips Done</span>
-            <span className="text-3xl font-bold text-white tracking-tighter">18</span>
-          </div>
-        </div>
+
 
         {/* Actions List - Deep Charcoal Mono */}
         <div className="bg-brand-surface border border-white/5 rounded-[2rem] overflow-hidden mt-8 shadow-3xl">

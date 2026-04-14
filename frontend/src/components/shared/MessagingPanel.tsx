@@ -118,9 +118,16 @@ export default function MessagingPanel({
                 key={msg.id} 
                 className={`flex flex-col max-w-[85%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}
               >
-                <span className={`text-[9px] font-bold uppercase tracking-widest mb-1 px-1 ${isMe ? 'text-emerald-400/60' : 'text-white/30'}`}>
-                  {isMe ? 'You' : msg.senderName}
-                </span>
+                <div className={`flex items-baseline gap-2 mb-1 px-1 ${isMe ? 'flex-row-reverse' : ''}`}>
+                  <span className={`text-[9px] font-bold uppercase tracking-widest ${isMe ? 'text-emerald-400/80' : 'text-white/40'}`}>
+                    {isMe ? 'You' : msg.senderName}
+                  </span>
+                  {msg.timestamp && (
+                    <span className="text-[8px] font-mono tracking-widest text-white/20">
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
                 <div 
                   className={`px-4 py-2.5 rounded-2xl ${
                     isMe 

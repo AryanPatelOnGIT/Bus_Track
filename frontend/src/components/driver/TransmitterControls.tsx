@@ -5,12 +5,15 @@ import { useRoutes } from "@/hooks/useRoutes";
 import { Bus, Navigation, Play, Square, ChevronDown, ChevronUp, MapPin } from "lucide-react";
 
 import { DriverData } from "@/hooks/useDrivers";
+import { BusData } from "@/hooks/useBuses";
 
 interface Props {
   onNewRequest?: (req: any) => void;
   busId: string;
   driverId: string;
   setDriverId: (id: string) => void;
+  buses: BusData[];
+  setSelectedBusId: (id: string) => void;
   drivers: DriverData[];
   selectedRouteIds: string[];
   setSelectedRouteIds: (ids: string[]) => void;
@@ -24,6 +27,8 @@ export default function TransmitterControls({
   busId,
   driverId,
   setDriverId,
+  buses,
+  setSelectedBusId,
   drivers,
   selectedRouteIds,
   setSelectedRouteIds,
@@ -67,31 +72,50 @@ export default function TransmitterControls({
           </div>
         </div>
 
-        {/* Active Bus Info */}
-        <div className="space-y-3">
-          <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Hardware Identity</label>
-          <div className="w-full bg-brand-dark/40 border border-white/5 rounded-2xl px-6 py-4 text-white text-sm flex items-center justify-between shadow-inner">
-            <div className="flex items-center gap-4">
-              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
-                <Bus className="w-4 h-4 text-white/50" />
-              </div>
-              <span className="font-black font-mono tracking-widest text-white/80">{busId || "UNASSIGNED"}</span>
-            </div>
-            <div className="flex items-center gap-2">
-               {isTracking ? (
-                 <>
-                   <span className="w-2 h-2 rounded-full bg-status-active shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                   <span className="text-[9px] font-black tracking-widest text-status-active uppercase">Operational</span>
-                 </>
-               ) : (
-                 <>
-                   <span className="w-2 h-2 rounded-full bg-white/20" />
-                   <span className="text-[9px] font-black tracking-widest text-white/40 uppercase">Offline</span>
-                 </>
-               )}
+        {/* Hardware Selector */}
+        {!isTracking ? (
+          <div className="space-y-3">
+            <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Hardware Identity (Fleet Vehicle)</label>
+            <div className="relative group">
+              <select
+                value={busId}
+                onChange={(e) => setSelectedBusId(e.target.value)}
+                className="w-full h-14 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-6 py-2.5 text-white text-sm font-bold focus:outline-none focus:ring-2 focus:ring-white/20 appearance-none shadow-2xl transition-all cursor-pointer"
+              >
+                <option value="" className="bg-[#1a1c29] text-white min-h-[40px]">— SELECT VEHICLE —</option>
+                {buses.map((b) => (
+                  <option key={b.id} value={b.id} className="bg-[#1a1c29] text-white min-h-[40px]">{b.name} ({b.id})</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 group-hover:text-white/60 transition-colors pointer-events-none" />
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-3">
+            <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Hardware Identity</label>
+            <div className="w-full bg-brand-dark/40 border border-white/5 rounded-2xl px-6 py-4 text-white text-sm flex items-center justify-between shadow-inner">
+              <div className="flex items-center gap-4">
+                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                  <Bus className="w-4 h-4 text-white/50" />
+                </div>
+                <span className="font-black font-mono tracking-widest text-white/80">{busId || "UNASSIGNED"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                 {isTracking ? (
+                   <>
+                     <span className="w-2 h-2 rounded-full bg-status-active shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+                     <span className="text-[9px] font-black tracking-widest text-status-active uppercase">Operational</span>
+                   </>
+                 ) : (
+                   <>
+                     <span className="w-2 h-2 rounded-full bg-white/20" />
+                     <span className="text-[9px] font-black tracking-widest text-white/40 uppercase">Offline</span>
+                   </>
+                 )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Operator Selector */}
         {!isTracking && (
@@ -117,14 +141,25 @@ export default function TransmitterControls({
         <div className="space-y-3">
           <label className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] px-1">Active Route ({selectedRouteIds.length > 0 ? 1 : 0} selected)</label>
           <div className="bg-brand-dark/40 border border-white/5 rounded-2xl overflow-hidden shadow-inner">
-            {!driverId ? (
-              <p className="text-[10px] text-white/20 font-bold uppercase tracking-widest text-center py-4">Select an operator first</p>
+            {!busId ? (
+              <p className="text-[10px] text-white/20 font-bold uppercase tracking-widest text-center py-4">Select a vehicle first</p>
             ) : (() => {
-              const activeDriver = drivers.find(d => d.id === driverId);
-              const allowedRoutes = routes.filter(r => activeDriver?.assignedRoutes?.includes(r.id));
+              if (buses.length === 0 || routes.length === 0) {
+                return <p className="text-[10px] text-white/20 font-bold uppercase tracking-widest text-center py-4 animate-pulse">Synchronizing Fleet Data...</p>;
+              }
+
+              const activeBus = buses.find(b => b.id === busId);
+              // Backward compatibility for legacy assignedRouteId
+              const busRoutes = activeBus?.assignedRoutes || ((activeBus as any)?.assignedRouteId ? [(activeBus as any).assignedRouteId] : []);
+              const allowedRoutes = routes.filter(r => busRoutes.includes(r.id));
               
               if (allowedRoutes.length === 0) {
-                return <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest text-center py-4">No routes assigned to this operator</p>;
+                return (
+                  <div className="flex flex-col items-center py-6 px-4 text-center">
+                    <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest mb-1">No Routes Assigned</p>
+                    <p className="text-[9px] text-white/20 font-medium">Vehicle "{busId}" is not authorized for any routes in the Admin Panel.</p>
+                  </div>
+                );
               }
 
               return allowedRoutes.map((r) => {
