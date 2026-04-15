@@ -18,7 +18,7 @@ let mockLat = 23.0347;
 let mockLng = 72.5483;
 let mockHeading = 45;
 
-type Tab = "map" | "messages" | "profile";
+type Tab = "map" | "profile";
 
 export default function DriverPage() {
   const { user } = useAuth();
@@ -46,6 +46,7 @@ export default function DriverPage() {
   const [isTracking, setIsTracking] = useState(false);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number; heading: number } | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("map");
+  const [isMessagingOpen, setIsMessagingOpen] = useState(false);
 
   // Always-current refs — fixes stale-closure bug in handleStopTracking
   const busIdRef = useRef("");
@@ -95,7 +96,7 @@ export default function DriverPage() {
     const messagesRef = ref(rtdb, `messages/${busId}`);
     onDisconnect(messagesRef).remove().catch(() => {});
 
-    const writeToFirebase = (loc: { lat: number; lng: number; heading: number; speed: number }) => {
+    const writeToFirebase = (loc: { lat: number; lng: number; heading: number; speed: number; currentStopIndex?: number }) => {
       // Write one entry per selected route so passengers on any of these routes can see the bus
       selectedRouteIds.forEach((routeId) => {
         const busRef = ref(rtdb, `activeBuses/${busId}_${routeId}`);
@@ -108,6 +109,7 @@ export default function DriverPage() {
           lng: loc.lng,
           heading: loc.heading,
           speed: loc.speed,
+          currentStopIndex: loc.currentStopIndex || 0,
           status: "active",
           timestamp: Date.now(),
         }).catch(console.error);
@@ -115,6 +117,9 @@ export default function DriverPage() {
     };
 
     const updateLocation = () => {
+      // Fetch latest known currentStopIndex directly from window if driver map set it
+      const currentIndex = (window as any).__CURRENT_STOP_INDEX || 0;
+
       if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
@@ -125,12 +130,13 @@ export default function DriverPage() {
             };
             const speed = (pos.coords.speed || 0) * 3.6;
             setDriverLocation(newLoc);
-            writeToFirebase({ ...newLoc, speed });
+            writeToFirebase({ ...newLoc, speed, currentStopIndex: currentIndex });
             // Also emit via socket if backend is available
             socketRef.current?.emit("driver:location-update", {
               busId, driverId,
               lat: newLoc.lat, lng: newLoc.lng, heading: newLoc.heading,
               speed, timestamp: pos.timestamp, status: "active",
+              currentStopIndex: currentIndex
             });
           },
           () => {
@@ -140,11 +146,12 @@ export default function DriverPage() {
             mockHeading = (mockHeading + (Math.random() - 0.5) * 15 + 360) % 360;
             const mockLoc = { lat: mockLat, lng: mockLng, heading: Math.round(mockHeading) };
             setDriverLocation(mockLoc);
-            writeToFirebase({ ...mockLoc, speed: 15 });
+            writeToFirebase({ ...mockLoc, speed: 15, currentStopIndex: currentIndex });
             socketRef.current?.emit("driver:location-update", {
               busId, driverId,
               lat: mockLoc.lat, lng: mockLoc.lng, heading: mockLoc.heading,
               speed: 15, timestamp: Date.now(), status: "active",
+              currentStopIndex: currentIndex
             });
           },
           { enableHighAccuracy: true, timeout: 5000 }
@@ -202,42 +209,62 @@ export default function DriverPage() {
                 driverLocation={driverLocation}
                 socketRef={socketRef as any}
                 busId={busId}
+                onEndShift={handleStopTracking}
+                isTracking={isTracking}
+                selectedRouteIds={selectedRouteIds}
               />
             )}
           </div>
           
-          <div className="absolute bottom-0 w-full z-10">
-            <TransmitterControls
-              busId={busId}
-              driverId={driverId}
-              setDriverId={setDriverId}
-              buses={buses}
-              setSelectedBusId={setSelectedBusId}
-              drivers={drivers}
-              selectedRouteIds={selectedRouteIds}
-              setSelectedRouteIds={setSelectedRouteIds}
-              isTracking={isTracking}
-              onStartTracking={handleStartTracking}
-              onStopTracking={handleStopTracking}
-              onRouteUpdate={handleRouteUpdate}
-            />
-          </div>
+          {!isTracking && (
+            <div className="absolute bottom-0 w-full z-10">
+              <TransmitterControls
+                busId={busId}
+                driverId={driverId}
+                setDriverId={setDriverId}
+                buses={buses}
+                setSelectedBusId={setSelectedBusId}
+                drivers={drivers}
+                selectedRouteIds={selectedRouteIds}
+                setSelectedRouteIds={setSelectedRouteIds}
+                isTracking={isTracking}
+                onStartTracking={handleStartTracking}
+                onStopTracking={handleStopTracking}
+                onRouteUpdate={handleRouteUpdate}
+              />
+            </div>
+          )}
         </div>
         
         <div className={`absolute inset-0 z-10 flex flex-col bg-brand-dark transition-opacity duration-300 ${activeTab === "profile" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
           <DriverProfileTab driverId={driverId || "UNASSIGNED"} busId={busId || "UNASSIGNED"} onStopTracking={handleStopTracking} isTracking={isTracking} />
         </div>
 
-        <div className={`absolute inset-0 z-20 flex flex-col pt-10 bg-brand-dark transition-opacity duration-300 ${activeTab === "messages" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-          <div className="flex-1 pb-safe overflow-hidden">
+        {/* Floating Messaging Button */}
+        {activeTab === "map" && !isMessagingOpen && (
+          <div className="absolute bottom-36 right-4 z-40">
+            <button 
+              onClick={() => setIsMessagingOpen(true)}
+              className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all"
+            >
+              <MessageSquare className="w-6 h-6" />
+            </button>
+          </div>
+        )}
+
+        {/* Messaging Overlay */}
+        {isMessagingOpen && (
+          <div className="absolute inset-x-0 bottom-0 top-32 z-50 animate-slide-up">
             <MessagingPanel
               busId={busId}
               currentUserRole="driver"
               currentUserId={user?.uid || driverId || "operator"}
               currentUserName={user?.displayName || "Operator"}
+              isOverlay={true}
+              onClose={() => setIsMessagingOpen(false)}
             />
           </div>
-        </div>
+        )}
       </div>
 
       {/* Bottom Navigation - Refined Charcoal Mono */}
@@ -253,16 +280,6 @@ export default function DriverPage() {
             <span className="text-[9px] font-black tracking-[0.15em] uppercase">Drive View</span>
           </button>
           
-          <button
-            onClick={() => setActiveTab("messages")}
-            className={`flex flex-col items-center justify-center py-3 flex-1 rounded-2xl transition-all duration-300 ${
-              activeTab === "messages" ? "text-white bg-white/5 transform scale-105" : "text-white/30 hover:text-white/60"
-            }`}
-          >
-            <MessageSquare className={`w-5 h-5 mb-1.5 ${activeTab === "messages" ? "text-white" : "opacity-40"}`} />
-            <span className="text-[9px] font-black tracking-[0.15em] uppercase">Messages</span>
-          </button>
-
           <button
             onClick={() => setActiveTab("profile")}
             className={`flex flex-col items-center justify-center py-3 flex-1 rounded-2xl transition-all duration-300 ${

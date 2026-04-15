@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { LocateFixed as GPS, Target, ArrowLeft } from "lucide-react";
+import { LocateFixed as GPS, ArrowLeft, ChevronRight } from "lucide-react";
 import {
   Map as GoogleMap,
   AdvancedMarker,
@@ -10,14 +10,20 @@ import {
 } from "@vis.gl/react-google-maps";
 import { RouteData } from "@/hooks/useRoutes";
 import { useGoogleDirections } from "@/hooks/useGoogleDirections";
-import { formatDistance, formatETA, getDistanceMeters, distanceFromPolyline } from "@/lib/mapUtils";
+import { getDistanceMeters, distanceFromPolyline } from "@/lib/mapUtils";
 import RoutePreviewCards from "@/components/maps/RoutePreviewCards";
+import RouteTimelineSheet from "@/components/passenger/RouteTimelineSheet";
+import { rtdb } from "@/lib/firebase";
+import { ref, update } from "firebase/database";
 
 export interface DriverMapProps {
   route: RouteData;
-  driverLocation: { lat: number; lng: number; heading: number } | null;
   socketRef: React.RefObject<ReturnType<typeof import("socket.io-client").io> | null>;
   busId: string;
+  driverLocation: { lat: number; lng: number; heading: number } | null;
+  onEndShift?: () => void;
+  isTracking?: boolean;
+  selectedRouteIds?: string[];
 }
 
 // ── Constants ──
@@ -29,43 +35,19 @@ const RIPPLE_KEYFRAMES = `
   }
 `;
 
-// ── Route colors (Google Maps style) ──
-const SELECTED_ROUTE_COLOR = "#4285F4";      // Google blue
-const ALTERNATIVE_ROUTE_COLOR = "#9AA0A6";   // Google gray
+const SELECTED_ROUTE_COLOR = "#4285F4";
+const ALTERNATIVE_ROUTE_COLOR = "#9AA0A6";
 const FULL_ROUTE_COLOR = "#4285F4";
+
+// Off-route threshold — 150m from the current polyline triggers a reroute
+const OFF_ROUTE_THRESHOLD_M = 150;
+// Minimum time between reroutes (ms)
+const REROUTE_COOLDOWN_MS = 20000;
 
 type NavPhase = "preview" | "navigating";
 
-// ── Memoized Info Bar ──
-const InfoBar = React.memo(function InfoBar({
-  distRem, durRem, hasArrived, targetName,
-}: { distRem: number; durRem: number; hasArrived: boolean; targetName: string }) {
-  if (hasArrived) {
-    return (
-      <div className="bg-emerald-500 border border-emerald-400 rounded-[1.5rem] px-8 py-5 shadow-3xl flex items-center justify-center gap-3">
-        <span className="text-brand-dark font-black text-xs uppercase tracking-widest leading-none">
-          Arrived at {targetName}
-        </span>
-      </div>
-    );
-  }
-  return (
-    <div className="bg-brand-surface/90 border border-white/5 shadow-3xl rounded-[2rem] p-6 flex justify-between items-center w-full">
-      <div className="flex flex-col text-center w-1/2">
-        <span className="text-white/30 text-[10px] font-black uppercase tracking-widest mb-1">Dist</span>
-        <span className="text-white text-lg font-black tracking-tighter">{formatDistance(distRem)}</span>
-      </div>
-      <div className="w-px h-8 bg-white/5" />
-      <div className="flex flex-col text-center w-1/2">
-        <span className="text-white/30 text-[10px] font-black uppercase tracking-widest mb-1">Time</span>
-        <span className="text-white text-lg font-black tracking-tighter">{formatETA(durRem / 60)}</span>
-      </div>
-    </div>
-  );
-});
 
-
-function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapProps) {
+function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, isTracking, selectedRouteIds }: DriverMapProps) {
   const map = useMap();
   const markerLib = useMapsLibrary("marker");
 
@@ -73,6 +55,38 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
   const stops = route.stops || [];
   const [currentStopIndex, setCurrentStopIndex] = useState(0);
   const nextStop = stops[currentStopIndex] ?? stops[stops.length - 1];
+  const finalStop = stops[stops.length - 1];
+
+  // ── Manual delay buffer (driver can add +1/+2 min for traffic) ──
+  const [delayMinutes, setDelayMinutes] = useState(0);
+  const lastDelayPushRef = useRef(0);
+
+  const pushDelay = useCallback((addMin: number) => {
+    setDelayMinutes(prev => {
+      const next = Math.max(0, prev + addMin); // never go below 0
+      const now = Date.now();
+      if (now - lastDelayPushRef.current > 500) {
+        lastDelayPushRef.current = now;
+        const routesToUpdate = selectedRouteIds?.length ? selectedRouteIds : [route.id];
+        routesToUpdate.forEach(routeId => {
+          const busRef = ref(rtdb, `activeBuses/${busId}_${routeId}`);
+          update(busRef, { delayMinutes: next }).catch(console.error);
+        });
+      }
+      return next;
+    });
+  }, [busId, selectedRouteIds, route.id]);
+
+  // ── Manual next-stop override ──
+  const handleManualNextStop = useCallback(() => {
+    setCurrentStopIndex(i => {
+      const nextIdx = Math.min(i + 1, stops.length - 1);
+      if (typeof window !== "undefined") {
+        (window as any).__CURRENT_STOP_INDEX = nextIdx;
+      }
+      return nextIdx;
+    });
+  }, [stops.length]);
 
   // Auto-advance when driver is within 80m of the next stop
   useEffect(() => {
@@ -82,7 +96,13 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
       { lat: nextStop.lat, lng: nextStop.lng }
     );
     if (dist < 80) {
-      setCurrentStopIndex(i => Math.min(i + 1, stops.length - 1));
+      setCurrentStopIndex(i => {
+        const nextIdx = Math.min(i + 1, stops.length - 1);
+        if (typeof window !== "undefined") {
+          (window as any).__CURRENT_STOP_INDEX = nextIdx;
+        }
+        return nextIdx;
+      });
     }
   }, [driverLocation?.lat, driverLocation?.lng, nextStop?.lat, nextStop?.lng, currentStopIndex, stops.length]);
 
@@ -96,20 +116,31 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
   const geometryLib = useMapsLibrary("geometry");
 
   // ═══════════════════════════════════════════════════════════════════
-  //  PREVIEW MODE — fetch full route
+  //  PREVIEW MODE — fetch full route (called exactly ONCE per session)
   // ═══════════════════════════════════════════════════════════════════
 
+  // Origin snaps to first stop (not live location) to prevent re-fetches as bus moves
   const previewOrigin = useMemo(() => {
-    if (driverLocation) return { lat: driverLocation.lat, lng: driverLocation.lng };
     if (stops.length) return { lat: stops[0].lat, lng: stops[0].lng };
+    if (driverLocation) return { lat: driverLocation.lat, lng: driverLocation.lng };
     return null;
-  }, [
-    driverLocation ? Math.round(driverLocation.lat * 1000) : null,
-    driverLocation ? Math.round(driverLocation.lng * 1000) : null,
-    stops,
-  ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stops]); // intentionally stable — only depends on static stops array
 
-  const apiDestination = nextStop ? { lat: nextStop.lat, lng: nextStop.lng } : null;
+  const apiDestination = finalStop ? { lat: finalStop.lat, lng: finalStop.lng } : null;
+
+  // Waypoints: a sampled set of all intermediate stops (max 23, Google's free limit)
+  const apiWaypoints = useMemo(() => {
+    if (stops.length <= 2) return [];
+    const mid = stops.slice(1, -1);
+    if (mid.length <= 23) return mid.map(s => ({ lat: s.lat, lng: s.lng }));
+    // Sample evenly
+    const step = mid.length / 23;
+    return Array.from({ length: 23 }, (_, k) => {
+      const s = mid[Math.floor(k * step)];
+      return { lat: s.lat, lng: s.lng };
+    });
+  }, [stops]);
 
   const {
     allRoutes: previewRoutes,
@@ -120,16 +151,13 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
   } = useGoogleDirections({
     origin: previewOrigin,
     destination: apiDestination,
-    waypoints: [],
+    waypoints: apiWaypoints,
     enabled: navPhase === "preview",
-    debounceMs: 8000,
+    debounceMs: 3000,
     provideRouteAlternatives: true,
   });
 
-
   // ─── Local ETA — zero API calls ─────────────────────────────────
-  // Distance = Haversine to nextStop. Speed uses driver's last GPS speed,
-  // falling back to a typical urban bus speed of 25 km/h.
   useEffect(() => {
     if (navPhase !== "navigating" || !driverLocation || !nextStop) return;
 
@@ -138,7 +166,6 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
       { lat: nextStop.lat, lng: nextStop.lng }
     );
 
-    // Speed: derive from last two GPS updates or use 25 km/h fallback
     const speedKmh = (driverLocation as any).speed > 0 ? (driverLocation as any).speed : 25;
     const speedMs = speedKmh / 3.6;
     const durationSec = speedMs > 0 ? distM / speedMs : 0;
@@ -154,19 +181,14 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
   //  IMPERATIVE POLYLINES
   // ═══════════════════════════════════════════════════════════════════
 
-  // Preview polylines — one per alternative route
   const previewPolylinesRef = useRef<google.maps.Polyline[]>([]);
-
-  // Nav polylines — full route
   const fullPolyRef = useRef<google.maps.Polyline | null>(null);
 
-  // Clean up all preview polylines
   const clearPreviewPolylines = useCallback(() => {
     previewPolylinesRef.current.forEach(p => p.setMap(null));
     previewPolylinesRef.current = [];
   }, []);
 
-  // Clean up nav polylines
   const clearNavPolylines = useCallback(() => {
     fullPolyRef.current?.setMap(null);
     fullPolyRef.current = null;
@@ -177,7 +199,6 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
     if (!map || navPhase !== "preview") return;
     clearPreviewPolylines();
 
-    // Draw alternatives FIRST (behind), then selected LAST (on top)
     const sortedIndices = previewRoutes
       .map((_, i) => i)
       .sort((a, b) => (a === previewSelectedIdx ? 1 : b === previewSelectedIdx ? -1 : 0));
@@ -199,11 +220,8 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
         clickable: !isSelected,
       });
 
-      // Click listener — tap alternative to select it
       if (!isSelected) {
-        polyline.addListener("click", () => {
-          selectPreviewRoute(i);
-        });
+        polyline.addListener("click", () => selectPreviewRoute(i));
       }
 
       polylines.push(polyline);
@@ -211,12 +229,13 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
 
     previewPolylinesRef.current = polylines;
 
-    // Fit bounds to show all routes
-    if (previewRoutes.length > 0) {
+    // Fit bounds to show all stops (not just the route preview)
+    if (stops.length > 0) {
       const bounds = new google.maps.LatLngBounds();
-      previewRoutes.forEach(r => {
-        r.overview_path?.forEach(p => bounds.extend(p));
-      });
+      stops.forEach(s => bounds.extend({ lat: s.lat, lng: s.lng }));
+      if (previewRoutes.length > 0) {
+        previewRoutes.forEach(r => r.overview_path?.forEach(p => bounds.extend(p)));
+      }
       map.fitBounds(bounds, { top: 100, bottom: 280, left: 50, right: 50 });
     }
 
@@ -225,30 +244,14 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
     };
   }, [map, navPhase, previewRoutes, previewSelectedIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Live segment navigation path
-  const [navPath, setNavPath] = useState<google.maps.LatLng[]>([]);
+  // ──────────────────────────────────────────────────────────────────
+  //  ACTIVE ROUTE PATH — cached from preview selection, drawn once
+  // ──────────────────────────────────────────────────────────────────
+  const [activePath, setActivePath] = useState<google.maps.LatLng[]>([]);
+  const lastRerouteRef = useRef(0);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
-  useEffect(() => {
-    if (navPhase !== "navigating" || !nextStop) return;
-
-    // Fetch the segment from current location to nextStop
-    const ds = new google.maps.DirectionsService();
-    const origin = driverLocation 
-      ? new google.maps.LatLng(driverLocation.lat, driverLocation.lng)
-      : new google.maps.LatLng(previewOrigin?.lat || 0, previewOrigin?.lng || 0);
-      
-    ds.route({
-      origin,
-      destination: new google.maps.LatLng(nextStop.lat, nextStop.lng),
-      travelMode: google.maps.TravelMode.DRIVING,
-    }, (res, status) => {
-      if (status === google.maps.DirectionsStatus.OK && res && res.routes[0]) {
-        setNavPath(res.routes[0].overview_path);
-      }
-    });
-  }, [navPhase, nextStop?.id]); // Re-run when target stop changes
-
-  // Draw full navigation route polyline (ZERO API calls, drawn from state)
+  // Draw nav polyline (uses activePath state — updated on start + reroutes)
   useEffect(() => {
     if (!map || navPhase !== "navigating" || !geometryLib) return;
     clearPreviewPolylines();
@@ -258,24 +261,107 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
         map,
         strokeColor: FULL_ROUTE_COLOR,
         strokeWeight: 6,
-        strokeOpacity: 0.6,
+        strokeOpacity: 0.9,
         zIndex: 40,
       });
     }
 
-    if (navPath.length > 0) {
-      fullPolyRef.current.setPath(navPath);
+    if (activePath.length > 0) {
+      fullPolyRef.current.setPath(activePath);
     } else {
-      const selected = previewRoutes[previewSelectedIdx];
-      if (selected && selected.overview_path) {
-        fullPolyRef.current.setPath(selected.overview_path);
-      }
+      // Fallback: draw straight lines between stops
+      const fallbackPath = stops.map(s => new google.maps.LatLng(s.lat, s.lng));
+      fullPolyRef.current.setPath(fallbackPath);
     }
 
-    return () => {
-      clearNavPolylines();
-    };
-  }, [map, navPhase, geometryLib, navPath, previewRoutes, previewSelectedIdx]);
+    return () => { clearNavPolylines(); };
+  }, [map, navPhase, geometryLib, activePath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ══════════════════════════════════════════════════════════════════
+  //  OFF-ROUTE AUTO-REROUTE (called on GPS updates in navigating mode)
+  // ══════════════════════════════════════════════════════════════════
+  const activePathRef = useRef<{ lat: number; lng: number }[]>([]);
+
+  useEffect(() => {
+    // Keep a ref copy of activePath for use inside async callbacks
+    activePathRef.current = activePath.map(p => ({ lat: p.lat(), lng: p.lng() }));
+  }, [activePath]);
+
+  useEffect(() => {
+    if (navPhase !== "navigating" || !driverLocation || !finalStop || isRecalculating) return;
+    const pathCoords = activePathRef.current;
+    if (pathCoords.length === 0) return;
+
+    const now = Date.now();
+    if (now - lastRerouteRef.current < REROUTE_COOLDOWN_MS) return;
+
+    const dist = distanceFromPolyline(
+      { lat: driverLocation.lat, lng: driverLocation.lng },
+      pathCoords
+    );
+
+    if (dist > OFF_ROUTE_THRESHOLD_M) {
+      lastRerouteRef.current = now;
+      setIsRecalculating(true);
+      console.log(`Driver off-route by ${Math.round(dist)}m — rerouting…`);
+
+      // Build remaining waypoints from currentStopIndex
+      const remainingStops = stops.slice(currentStopIndex, -1);
+      const waypointsForReroute = remainingStops.length <= 23
+        ? remainingStops.map(s => ({ location: new google.maps.LatLng(s.lat, s.lng), stopover: false }))
+        : Array.from({ length: 23 }, (_, k) => {
+            const s = remainingStops[Math.floor(k * remainingStops.length / 23)];
+            return { location: new google.maps.LatLng(s.lat, s.lng), stopover: false };
+          });
+
+      const ds = new google.maps.DirectionsService();
+      ds.route({
+        origin: new google.maps.LatLng(driverLocation.lat, driverLocation.lng),
+        destination: new google.maps.LatLng(finalStop.lat, finalStop.lng),
+        waypoints: waypointsForReroute,
+        travelMode: google.maps.TravelMode.DRIVING,
+      }, async (res, status) => {
+        if (status === google.maps.DirectionsStatus.OK && res?.routes[0]) {
+          const newPath = res.routes[0].overview_path;
+          setActivePath(newPath);
+
+          // Sync new polyline to Firestore so passengers see the corrected route
+          try {
+            const { doc, updateDoc } = await import("firebase/firestore");
+            const { db } = await import("@/lib/firebase");
+            await updateDoc(doc(db, "routes", route.id), {
+              polyline: res.routes[0].overview_polyline
+            });
+            console.log("Rerouted + synced to Firebase.");
+          } catch (e) {
+            console.error("Failed to sync reroute polyline", e);
+          }
+        }
+        setTimeout(() => setIsRecalculating(false), REROUTE_COOLDOWN_MS / 2);
+      });
+    }
+  }, [driverLocation?.lat, driverLocation?.lng, navPhase, isRecalculating, currentStopIndex, finalStop, stops, route.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync selected polyline to Firebase when navigation starts
+  useEffect(() => {
+    if (navPhase === "navigating" && previewRoutes[previewSelectedIdx]?.overview_polyline) {
+      const path = previewRoutes[previewSelectedIdx].overview_path;
+      if (path) setActivePath(path);
+
+      const syncPolyline = async () => {
+        try {
+          const { doc, updateDoc } = await import("firebase/firestore");
+          const { db } = await import("@/lib/firebase");
+          await updateDoc(doc(db, "routes", route.id), {
+            polyline: previewRoutes[previewSelectedIdx].overview_polyline
+          });
+        } catch (e) {
+          console.error("Failed to sync initial polyline", e);
+        }
+      };
+      syncPolyline();
+    }
+  }, [navPhase, previewSelectedIdx, previewRoutes, route.id]);
 
 
   // ═══════════════════════════════════════════════════════════════════
@@ -314,7 +400,6 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
     };
   }, [map, markerLib]);
 
-  // Update bus marker position
   useEffect(() => {
     if (!busMarkerRef.current || !driverLocation) return;
     busMarkerRef.current.position = { lat: driverLocation.lat, lng: driverLocation.lng };
@@ -325,77 +410,10 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
     }
   }, [driverLocation?.lat, driverLocation?.lng, driverLocation?.heading]);
 
-  // Show/hide marker based on location availability
   useEffect(() => {
     if (!busMarkerRef.current) return;
     busMarkerRef.current.map = driverLocation ? (map ?? null) : null;
   }, [map, !!driverLocation]); // eslint-disable-line react-hooks/exhaustive-deps
-
-
-  // ═══════════════════════════════════════════════════════════════════
-  //  OFF-ROUTE DETECTION & RECALCULATION
-  // ═══════════════════════════════════════════════════════════════════
-  
-  const [isRecalculating, setIsRecalculating] = useState(false);
-  
-  const finalStop = stops.length > 0 ? stops[stops.length - 1] : null;
-  const fullWaypoints = useMemo(() => {
-    if (!stops.length || currentStopIndex >= stops.length - 1) return [];
-    const remaining = stops.slice(currentStopIndex, -1);
-    if (remaining.length <= 25) return remaining.map(s => ({ lat: s.lat, lng: s.lng }));
-    const sampled = [];
-    const step = remaining.length / 25;
-    for (let i = 0; i < 25; i++) {
-        const s = remaining[Math.floor(i * step)];
-        sampled.push({ lat: s.lat, lng: s.lng });
-    }
-    return sampled;
-  }, [stops, currentStopIndex]);
-
-  useEffect(() => {
-    if (navPhase !== "navigating" || !driverLocation || !geometryLib || !route.polyline || isRecalculating) return;
-
-    try {
-      const decoded = geometryLib.encoding.decodePath(route.polyline);
-      const polyCoords = decoded.map(p => ({ lat: p.lat(), lng: p.lng() }));
-      
-      const dist = distanceFromPolyline(
-        { lat: driverLocation.lat, lng: driverLocation.lng },
-        polyCoords
-      );
-      
-      if (dist > 150) {
-        setIsRecalculating(true);
-        console.log(`Driver off-route by ${Math.round(dist)}m! Recalculating full route for passengers...`);
-        
-        const ds = new google.maps.DirectionsService();
-        ds.route({
-          origin: new google.maps.LatLng(driverLocation.lat, driverLocation.lng),
-          destination: finalStop ? new google.maps.LatLng(finalStop.lat, finalStop.lng) : new google.maps.LatLng(driverLocation.lat, driverLocation.lng),
-          waypoints: fullWaypoints.map(wp => ({ location: new google.maps.LatLng(wp.lat, wp.lng), stopover: true })),
-          travelMode: google.maps.TravelMode.DRIVING
-        }, async (res, status) => {
-          if (status === google.maps.DirectionsStatus.OK && res && res.routes[0]) {
-             try {
-                const { doc, updateDoc } = await import("firebase/firestore");
-                const { db } = await import("@/lib/firebase");
-                
-                await updateDoc(doc(db, "routes", route.id), {
-                  polyline: res.routes[0].overview_polyline
-                });
-                console.log("Recalculation complete, automatically updated Firebase.");
-             } catch (e) {
-                console.error("Failed to save recalculated route to Firebase", e);
-             }
-          }
-          // Wait briefly before allowing another recalculation check
-          setTimeout(() => setIsRecalculating(false), 8000);
-        });
-      }
-    } catch (err) {
-      console.warn("Off-route math error", err);
-    }
-  }, [driverLocation?.lat, driverLocation?.lng, navPhase, geometryLib, route.polyline, isRecalculating, finalStop, fullWaypoints, route.id]);
 
 
   // ═══════════════════════════════════════════════════════════════════
@@ -427,6 +445,7 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
   const handleStartNavigation = useCallback(async () => {
     setNavPhase("navigating");
     setIsCentered(true);
+    setDelayMinutes(0);
   }, []);
 
   const handleBackToPreview = useCallback(() => {
@@ -434,16 +453,28 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
     clearNavPolylines();
   }, [clearNavPolylines]);
 
-  const hasArrived = displayDist < 80 && displayDist > 0 && currentStopIndex >= stops.length - 1;
-
   const defaultCenterRef = useRef(
     driverLocation || (stops.length ? { lat: stops[0].lat, lng: stops[0].lng } : { lat: 23.03, lng: 72.55 })
   );
 
+  // ── Build upstream ETAs for all stops ──
+  const upcomingETAs = useMemo(() => {
+    const etaMap: Record<string, number> = {};
+    let accumTime = displayDur;
+    if (nextStop?.id) {
+      etaMap[nextStop.id] = Math.round((accumTime / 60) + delayMinutes);
+      for (let i = currentStopIndex + 1; i < stops.length; i++) {
+        const dist = (getDistanceMeters(stops[i - 1], stops[i]) * 1.3) + 125;
+        accumTime += (dist / 250) * 60;
+        etaMap[stops[i].id] = Math.round((accumTime / 60) + delayMinutes);
+      }
+    }
+    return etaMap;
+  }, [displayDur, delayMinutes, nextStop?.id, currentStopIndex, stops]);
+
   return (
     <>
       <style>{RIPPLE_KEYFRAMES}</style>
-
 
       <div
         className="absolute inset-0 z-0"
@@ -457,11 +488,10 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
           mapId={"b1b1b1b1b1b1b1b1"}
           gestureHandling="greedy"
         >
-          {/* All Stops - color coded and numbered */}
+          {/* Render ALL stops — always visible regardless of phase */}
           {stops.map((stop, i) => (
             <AdvancedMarker key={`stop-${stop.id || i}`} position={{ lat: stop.lat, lng: stop.lng }} zIndex={i === currentStopIndex ? 100 : 50}>
               {i === currentStopIndex ? (
-                // Next target stop — highlighted & animated
                 <div className="relative flex flex-col items-center">
                   <div
                     className="absolute w-8 h-8 bg-orange-500 rounded-full"
@@ -475,12 +505,10 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
                   </span>
                 </div>
               ) : i < currentStopIndex ? (
-                // Already visited — dimmed orange
                 <div className="flex items-center justify-center w-6 h-6 bg-orange-500/60 border-2 border-orange-400/50 rounded-full opacity-60 shadow-lg">
                   <span className="text-white font-black text-[10px]">{String.fromCharCode(65 + i)}</span>
                 </div>
               ) : (
-                // Upcoming — unreached
                 <div className="relative flex flex-col items-center">
                   <div className="flex items-center justify-center w-6 h-6 bg-orange-500 border-2 border-orange-400 rounded-full shadow-lg">
                     <span className="text-white font-black text-[10px]">{String.fromCharCode(65 + i)}</span>
@@ -495,35 +523,34 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
         </GoogleMap>
       </div>
 
-      {/* ── Top-left: Back button (navigating → preview) ── */}
-      {navPhase === "navigating" && (
-        <div className="absolute left-6 top-32 z-40">
+      {/* ── Top-left: Back button moves to top-RIGHT corner ── */}
+      {/* ── Top-right: Back (navigating → preview) + Recenter ── */}
+      <div className="absolute right-4 top-10 z-40 flex flex-col gap-3">
+        {navPhase === "navigating" && (
           <button
             onClick={handleBackToPreview}
             className="p-4 rounded-full shadow-2xl bg-brand-surface border border-white/10 text-white active:scale-95 transition-all"
+            title="Back to route preview"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-        </div>
-      )}
-
-      {/* ── Top-right: Recenter button ── */}
-      <div className={`absolute right-6 z-40 ${navPhase === "navigating" ? "top-32" : "top-8"}`}>
+        )}
         <button
           onClick={handleRecenter}
-          className={`p-4 rounded-full shadow-2xl transition-all duration-300 ${isCentered
-            ? "bg-blue-500 text-white scale-90 opacity-40 hover:opacity-100"
-            : "bg-white text-slate-900 scale-100 hover:bg-slate-100"
-          } border border-white/20 active:scale-95`}
+          className={`p-4 rounded-full shadow-2xl transition-all duration-300 border active:scale-95 ${
+            isCentered
+              ? "bg-blue-500 text-white border-blue-400 opacity-60"
+              : "bg-brand-surface text-white border-white/10 hover:bg-white/10"
+          }`}
+          title="Recenter map on bus"
         >
-          {isCentered ? <GPS /> : <Target />}
+          <GPS className="w-5 h-5" />
         </button>
       </div>
 
       {/* ── Bottom Panel ── */}
       <div className="absolute bottom-6 left-0 right-0 z-50">
         {navPhase === "preview" ? (
-          /* Route Preview Cards — Google Maps style */
           <RoutePreviewCards
             routes={routeSummaries}
             selectedIndex={previewSelectedIdx}
@@ -532,25 +559,61 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapPr
             isLoading={previewLoading && previewRoutes.length === 0}
           />
         ) : (
-          /* Navigation Info Bar */
-          <div className="px-6 max-w-sm mx-auto">
-            {stops.length > 0 && (
-              <div className="mb-2 text-center">
-                <span className="text-[9px] font-black uppercase tracking-widest text-white/30">
-                  Path {String.fromCharCode(65 + Math.max(0, currentStopIndex - (currentStopIndex === 0 ? 0 : 1)))} - {String.fromCharCode(65 + Math.max(1, currentStopIndex))} — 
-                </span>
-                <span className="text-[9px] font-black uppercase tracking-widest text-white/60">
-                  {nextStop?.name || "Final Stop"}
-                </span>
+          <RouteTimelineSheet
+            route={route}
+            targetStopId={stops[stops.length - 1]?.id || ""}
+            activeBusId={busId}
+            stopETAs={upcomingETAs}
+            headerContent={
+              <div className="flex items-center w-full justify-between mt-2 pl-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
+                  <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest leading-none">
+                    Transmitting
+                  </span>
+                  {delayMinutes > 0 && (
+                    <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-black uppercase tracking-widest">
+                      +{delayMinutes} MIN
+                    </span>
+                  )}
+                </div>
+                {onEndShift && isTracking && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onEndShift(); }}
+                    className="h-8 px-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[9px] font-black uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white transition-all pointer-events-auto"
+                  >
+                    End Shift
+                  </button>
+                )}
               </div>
-            )}
-            <InfoBar
-              distRem={displayDist}
-              durRem={displayDur}
-              hasArrived={hasArrived}
-              targetName={nextStop?.name || "Final Stop"}
-            />
-          </div>
+            }
+            bottomControls={
+              <div className="flex items-center gap-2 justify-between w-full">
+                {/* Left: delay controls */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-black text-white/30 uppercase tracking-widest mr-1">Delay</span>
+                  <button onClick={() => pushDelay(-2)} className="h-9 w-12 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black hover:bg-blue-500/30 active:scale-90 transition-all flex items-center justify-center">-2</button>
+                  <button onClick={() => pushDelay(-1)} className="h-9 w-12 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black hover:bg-blue-500/30 active:scale-90 transition-all flex items-center justify-center">-1</button>
+                  <div className="px-2 min-w-[36px] text-center">
+                    <span className={`text-sm font-black ${delayMinutes > 0 ? 'text-amber-400' : 'text-white/20'}`}>{delayMinutes > 0 ? `+${delayMinutes}` : '0'}</span>
+                    <div className="text-[7px] text-white/20 uppercase tracking-widest">min</div>
+                  </div>
+                  <button onClick={() => pushDelay(1)} className="h-9 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black hover:bg-amber-500/30 active:scale-90 transition-all flex items-center justify-center">+1</button>
+                  <button onClick={() => pushDelay(2)} className="h-9 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black hover:bg-amber-500/30 active:scale-90 transition-all flex items-center justify-center">+2</button>
+                </div>
+                {/* Right: manual next-stop */}
+                {currentStopIndex < stops.length - 1 && (
+                  <button
+                    onClick={handleManualNextStop}
+                    className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white/5 border border-white/10 text-white/60 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 active:scale-90 transition-all"
+                  >
+                    Next Stop
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            }
+          />
         )}
       </div>
     </>

@@ -49,30 +49,25 @@ export default function TransmitterControls({
   }, [isTracking]);
 
   return (
-    <div className={`flex flex-col w-full md:max-w-2xl md:mx-auto bg-brand-surface/90 backdrop-blur-2xl rounded-t-[2.5rem] border-t border-white/5 shadow-3xl transition-all duration-500 overflow-hidden relative`}>
-      {/* Drag handle / toggle indicator */}
+    <div className={`flex flex-col w-full bg-brand-dark rounded-t-3xl border-t border-white/10 shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden relative`}>
+      {/* Drag Handle / Header */}
       <div 
-        className="w-full flex justify-center pt-4 pb-2 cursor-pointer group"
+        className="w-full h-[60px] flex items-center justify-between px-6 cursor-pointer relative"
         onClick={() => setIsExpanded(!isExpanded)}
-        aria-label={isExpanded ? "Collapse transmitter panel" : "Expand transmitter panel"}
-        role="button"
       >
-        <div className="w-12 h-1.5 bg-white/10 rounded-full group-hover:bg-white/20 transition-all" />
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-white/20 rounded-full" />
+        <div className="flex items-center gap-3 mt-2">
+          <Navigation className="w-4 h-4 text-white/50" />
+          <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/70">
+            Transmitter Controls
+          </span>
+        </div>
+        <div className="mt-2 text-white/40">
+          {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+        </div>
       </div>
 
       <div className={`px-6 md:px-8 gap-5 md:gap-6 flex-col overflow-y-auto max-h-[55vh] ${isExpanded ? 'flex pb-8' : 'hidden'}`}>
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-display font-bold text-white text-2xl tracking-tight" style={{ fontFamily: "Outfit, sans-serif" }}>
-              Transmitter <span className="text-white/20">Control</span>
-            </h2>
-            <p className="text-[10px] font-bold text-white/20 uppercase tracking-[0.2em] mt-1">Live Telemetry Control Panel</p>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center">
-             <Navigation className="w-5 h-5 text-white/40" />
-          </div>
-        </div>
 
         {/* Hardware Selector */}
         {!isTracking ? (

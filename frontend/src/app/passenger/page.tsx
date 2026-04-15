@@ -11,7 +11,7 @@ import { Map as MapIcon, User, Loader2, MessageSquare } from "lucide-react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, off } from "firebase/database";
 import { buzzController } from "@/lib/audioUtils";
-import RouteTimelineSheet from "@/components/passenger/RouteTimelineSheet";
+
 
 type Tab = "map" | "account";
 
@@ -172,10 +172,10 @@ export default function PassengerPage() {
                         setSelectedStopId(e.target.value);
                         buzzController.unlock();
                       }}
-                      className="w-full h-12 backdrop-blur-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-6 text-white text-xs focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight transition-all cursor-pointer"
+                      className="w-full h-12 bg-black/95 hover:bg-black border border-white/20 rounded-2xl px-6 text-white text-xs focus:outline-none focus:ring-2 focus:ring-white/50 shadow-2xl appearance-none font-bold tracking-tight transition-all cursor-pointer"
                     >
                       {activeRoute.stops.map((s) => (
-                        <option key={s.id} value={s.id} className="bg-[#1a1c29] text-white">Alight at: {s.name}</option>
+                        <option key={s.id} value={s.id} className="bg-black text-white">Your destination stop: {s.name}</option>
                       ))}
                     </select>
                     <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-white/30 group-hover:text-white/60 transition-colors">
@@ -187,9 +187,9 @@ export default function PassengerPage() {
                 )}
               </div>
 
-              {/* Messaging Button */}
+              {/* Messaging Button — positioned high above timeline */}
               {activeRouteIds.includes(activeRoute.id) && !isMessagingOpen && (
-                <div className="absolute bottom-48 right-4 z-40">
+                <div className="absolute bottom-[220px] right-4 z-40">
                   <button 
                     onClick={() => setIsMessagingOpen(true)}
                     className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all"
@@ -243,12 +243,7 @@ export default function PassengerPage() {
         />
       )}
 
-      {/* Navigation Timeline Bottom Sheet (Moovit-style) */}
-      <RouteTimelineSheet 
-        route={activeRoute || null} 
-        targetStopId={selectedStopId} 
-        activeBusId={activeBusOnRoute}
-      />
+
 
       {/* Bottom Navigation */}
       <nav className="relative z-50 shrink-0 bg-brand-surface/80 border-t border-white/5 backdrop-blur-2xl pb-safe">

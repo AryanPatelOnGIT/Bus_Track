@@ -58,16 +58,44 @@ export default function MessagingPanel({
     return () => unsubscribe();
   }, [busId]);
 
+  // --- Rate Limiting Logic ---
+  const [messagesSentCounts, setMessagesSentCounts] = useState<{timestamp: number}[]>([]);
+
+  // --- Profanity Filter ---
+  // Matches generic English, common Hindi/Hinglish profanities
+  const PROFANITY_REGEX = /\b(fuck|shit|bitch|ass|asshole|cunt|dick|pussy|bastard|mc|bc|madarchod|bhenchod|chutiya|gandu|bhosadike|bhosdi|harami|kutta|bitch|slut|whore|randi|muth|bhosada)\b/gi;
+
+  const censorText = (text: string) => {
+    return text.replace(PROFANITY_REGEX, "***");
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !busId) return;
 
+    const now = Date.now();
+    const oneHourAgo = now - 3600000;
+    const recentMessages = messagesSentCounts.filter(m => m.timestamp > oneHourAgo);
+    
+    if (recentMessages.length >= 60) {
+      alert("Rate limit exceeded: Maximum 60 messages per hour. Please try again later.");
+      return;
+    }
+    
+    // Add 3-second quick spam cooldown
+    if (recentMessages.length > 0 && (now - recentMessages[recentMessages.length - 1].timestamp < 3000)) {
+      setNewMessage("");
+      return;
+    }
+
+    const censoredContent = censorText(newMessage.trim());
+    setMessagesSentCounts([...recentMessages, { timestamp: now }]);
     const roleForMsg = currentUserRole === "admin" ? "driver" : currentUserRole;
 
     try {
       const messagesRef = ref(rtdb, `messages/${busId}`);
       await push(messagesRef, {
-        text: newMessage.trim(),
+        text: censoredContent,
         from: roleForMsg,
         senderName: currentUserName || (roleForMsg === "driver" ? "Operator" : "Rider"),
         senderId: currentUserId || "anonymous",
