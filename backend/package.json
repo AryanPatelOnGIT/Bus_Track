@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "lint": "eslint src --ext .ts",
-    "seed": "tsx src/seed.ts"
+    "seed": "tsx src/seed.ts",
+    "patch-stops": "tsx src/patch-stops.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

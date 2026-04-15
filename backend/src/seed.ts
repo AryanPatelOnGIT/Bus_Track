@@ -50,11 +50,17 @@ async function seedFirebase() {
 
       const routeDoc = routesCollection.doc(route.id);
       
+      // Format stops: remove waypointIndex (internal use only) and include essential fields
+      const formattedStops = (route.stops ?? []).map(({ id, name, shortName, lat, lng, waypointIndex }) => ({
+        id, name, shortName, lat, lng, waypointIndex,
+      }));
+
       await routeDoc.set({
         id: route.id,
         name: route.name,
         waypoints: formattedWaypoints, // Stored as array of objects
         color: route.color,
+        stops: formattedStops,         // Named stops for route planner
         polyline: geometry.encodedPolyline,
         distanceMeters: geometry.distanceMeters,
         duration: geometry.duration,
