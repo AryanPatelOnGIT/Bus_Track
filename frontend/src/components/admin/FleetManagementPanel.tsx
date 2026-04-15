@@ -1,229 +1,398 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useBuses, BusData } from "@/hooks/useBuses";
 import { useDrivers, DriverData } from "@/hooks/useDrivers";
 import { useRoutes } from "@/hooks/useRoutes";
 import { doc, setDoc, deleteDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { Bus, User, Trash2, Plus, ArrowRight } from "lucide-react";
+import { db, rtdb } from "@/lib/firebase";
+import { ref, onValue } from "firebase/database";
+import {
+  Bus, User, Trash2, Plus, ArrowRight,
+  ChevronDown, ChevronUp, Wifi,
+} from "lucide-react";
 
-export default function FleetManagementPanel() {
+// ── Live bus tracking ─────────────────────────────────────────────────────────
+interface ActiveBusEntry {
+  busId: string;
+  driverId?: string;
+  routeId?: string;
+  lat?: number;
+  lng?: number;
+  speed?: number;
+}
+
+function useActiveBuses(): ActiveBusEntry[] {
+  const [active, setActive] = useState<ActiveBusEntry[]>([]);
+  useEffect(() => {
+    const r = ref(rtdb, "activeBuses");
+    const unsub = onValue(r, (snap) => {
+      const data = snap.val() as Record<string, ActiveBusEntry> | null;
+      setActive(data ? Object.values(data) : []);
+    });
+    return () => unsub();
+  }, []);
+  return active;
+}
+
+interface Props {
+  mode?: "fleet" | "personnel" | "routes";
+}
+
+export default function FleetManagementPanel({ mode = "fleet" }: Props) {
   const { buses, loading: busesLoading } = useBuses();
   const { drivers, loading: driversLoading } = useDrivers();
   const { routes } = useRoutes();
+  const activeEntries = useActiveBuses();
+  const activeBusIds = new Set(activeEntries.map((e) => e.busId));
 
-  // Bus Form State
+  // Bus form
   const [newBusId, setNewBusId] = useState("");
   const [newBusName, setNewBusName] = useState("");
-  const [newBusRouteId, setNewBusRouteId] = useState("");
+  const [newBusRoutes, setNewBusRoutes] = useState<string[]>([]);
+  const [busListOpen, setBusListOpen] = useState(true);
 
-  // Driver Form State
+  // Driver form
   const [newDriverId, setNewDriverId] = useState("");
   const [newDriverName, setNewDriverName] = useState("");
   const [newDriverBusId, setNewDriverBusId] = useState("");
-  const [newDriverRoutes, setNewDriverRoutes] = useState<string[]>([]);
+  const [driverListOpen, setDriverListOpen] = useState(true);
+
+  const toggleRoute = (id: string) =>
+    setNewBusRoutes((prev) =>
+      prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]
+    );
 
   const handleAddBus = async () => {
     if (!newBusId || !newBusName) return;
     try {
-      const busData: BusData = {
+      await setDoc(doc(db, "buses", newBusId), {
         id: newBusId,
         name: newBusName,
-        assignedRouteId: newBusRouteId || null,
-      };
-      await setDoc(doc(db, "buses", newBusId), busData);
-      setNewBusId("");
-      setNewBusName("");
-      setNewBusRouteId("");
-    } catch (e: any) {
-      console.error("Error adding bus", e);
-      alert("Failed to add Vehicle: " + e.message);
-    }
+        assignedRoutes: newBusRoutes,
+      } as BusData);
+      setNewBusId(""); setNewBusName(""); setNewBusRoutes([]);
+    } catch (e: any) { alert("Failed to add Vehicle: " + e.message); }
   };
 
   const handleDeleteBus = async (id: string) => {
-    if (confirm("Delete bus?")) {
-      try {
-        await deleteDoc(doc(db, "buses", id));
-      } catch (e: any) {
-        alert("Failed to delete Vehicle: " + e.message);
-      }
-    }
+    if (confirm("Delete bus?"))
+      try { await deleteDoc(doc(db, "buses", id)); }
+      catch (e: any) { alert("Failed to delete Vehicle: " + e.message); }
   };
 
   const handleAddDriver = async () => {
     if (!newDriverId || !newDriverName) return;
     try {
-      const driverData: DriverData = {
+      await setDoc(doc(db, "drivers", newDriverId), {
         id: newDriverId,
         name: newDriverName,
         assignedBusId: newDriverBusId || null,
-        assignedRoutes: newDriverRoutes,
-      };
-      await setDoc(doc(db, "drivers", newDriverId), driverData);
-      setNewDriverId("");
-      setNewDriverName("");
-      setNewDriverBusId("");
-      setNewDriverRoutes([]);
-    } catch (e: any) {
-      console.error("Error adding driver", e);
-      alert("Failed to add Operator: " + e.message);
-    }
+      } as DriverData);
+      setNewDriverId(""); setNewDriverName(""); setNewDriverBusId("");
+    } catch (e: any) { alert("Failed to add Operator: " + e.message); }
   };
 
   const handleDeleteDriver = async (id: string) => {
-    if (confirm("Delete driver?")) {
-      try {
-        await deleteDoc(doc(db, "drivers", id));
-      } catch (e: any) {
-        alert("Failed to delete Operator: " + e.message);
-      }
-    }
+    if (confirm("Delete driver?"))
+      try { await deleteDoc(doc(db, "drivers", id)); }
+      catch (e: any) { alert("Failed to delete Operator: " + e.message); }
   };
 
+  // Live drivers = drivers whose ID appears in the active tracking feed
+  const liveDriverIds = new Set(activeEntries.map((e) => e.driverId).filter(Boolean));
+  const liveDrivers = drivers.filter((d) => liveDriverIds.has(d.id));
+
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 md:gap-8 p-4 md:p-8 mb-20 animate-slide-up">
-      {/* Buses Section */}
-      <div className="flex-1 bg-brand-surface/40 border border-white/5 shadow-3xl rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-8 flex flex-col">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-            <Bus className="w-5 h-5 text-white/40" />
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 p-3 md:p-6 animate-slide-up">
+
+      {/* ══ LIVE NOW banner (only when someone is online) ══ */}
+      {liveDrivers.length > 0 && (
+        <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-400">
+              Live Now — {liveDrivers.length} Driver{liveDrivers.length !== 1 ? "s" : ""} Online
+            </span>
           </div>
-          <div>
-            <h2 className="font-bold text-xl tracking-tight" style={{ fontFamily: "Outfit" }}>Fleet Vehicles</h2>
-            <p className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-black">Manage Hardware IDs</p>
+          <div className="flex flex-wrap gap-2">
+            {liveDrivers.map((d) => {
+              const entry = activeEntries.find((e) => e.driverId === d.id);
+              if (!entry) return null;
+              const bus = buses.find((b) => b.id === entry.busId);
+              const route = routes.find((r) => r.id === entry.routeId);
+              return (
+                <div
+                  key={d.id}
+                  className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                    <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-white leading-tight">{d.name}</span>
+                    <span className="text-[9px] text-emerald-400/70 font-mono">
+                      {bus?.name || entry.busId}
+                      {route ? ` · ${route.name}` : ""}
+                      {entry.speed != null ? ` · ${Math.round(entry.speed)} km/h` : ""}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+      )}
 
-        {/* Add Bus Form */}
-        <div className="bg-brand-dark/40 p-5 rounded-[1.5rem] border border-white/5 mb-8 flex flex-col gap-4">
-          <input 
-            type="text" value={newBusId} onChange={(e) => setNewBusId(e.target.value)} 
-            placeholder="Hardware ID (e.g. BRTS-101)" 
-            className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm text-white focus:border-white transition-colors placeholder:text-white/20 font-bold"
-          />
-          <input 
-            type="text" value={newBusName} onChange={(e) => setNewBusName(e.target.value)} 
-            placeholder="Display Name (e.g. Red Line Express)" 
-            className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm text-white focus:border-white transition-colors placeholder:text-white/20 font-bold"
-          />
-          <select 
-            value={newBusRouteId} onChange={(e) => setNewBusRouteId(e.target.value)}
-            className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm text-white focus:border-white transition-colors placeholder:text-white/20 font-bold appearance-none"
-          >
-            <option value="">— Unassigned Route —</option>
-            {routes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
-          <button onClick={handleAddBus} className="h-12 bg-white text-brand-dark rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
-            <Plus className="w-4 h-4" /> Add Vehicle
-          </button>
-        </div>
+      {/* ══ CONDITIONAL TABS: Vehicles OR Drivers ══ */}
+      <div className="flex flex-col gap-5 w-full max-w-3xl mx-auto">
 
-        {/* Bus List */}
-        <div className="flex-1 flex flex-col gap-3 overflow-y-auto">
-          {busesLoading ? <p className="text-white/20 text-xs text-center p-4">Loading...</p> : buses.length === 0 ? <p className="text-white/20 text-xs text-center p-4 font-bold uppercase tracking-widest">No matching records.</p> : null}
-          {buses.map(bus => (
-            <div key={bus.id} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between group">
-              <div className="flex flex-col">
-                <span className="font-bold text-white text-sm">{bus.name}</span>
-                <span className="text-[10px] text-white/30 font-mono tracking-widest">{bus.id}</span>
-                {bus.assignedRouteId && (
-                  <span className="text-[10px] text-emerald-400 font-bold uppercase mt-1 tracking-widest flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3" /> Route: {routes.find(r => r.id === bus.assignedRouteId)?.name || bus.assignedRouteId}
+        {/* ── FLEET VEHICLES ── */}
+        {mode === "fleet" && (
+          <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
+              <Bus className="w-4 h-4 text-white/40" />
+            </div>
+            <div>
+              <h2 className="font-bold text-lg tracking-tight" style={{ fontFamily: "Outfit" }}>Fleet Vehicles</h2>
+              <p className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-black">Manage Hardware IDs</p>
+            </div>
+          </div>
+
+          {/* Add form */}
+          <div className="bg-brand-surface/40 border border-white/5 rounded-[1.5rem] p-4 flex flex-col gap-2.5">
+            <p className="text-[9px] text-white/20 font-black uppercase tracking-[0.2em]">Register new vehicle</p>
+            <input
+              value={newBusId} onChange={(e) => setNewBusId(e.target.value)}
+              placeholder="Hardware ID (e.g. BRTS-101)"
+              className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 text-sm text-white focus:border-white/40 outline-none transition-colors placeholder:text-white/20 font-bold"
+            />
+            <input
+              value={newBusName} onChange={(e) => setNewBusName(e.target.value)}
+              placeholder="Display Name (e.g. Red Line Express)"
+              className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 text-sm text-white focus:border-white/40 outline-none transition-colors placeholder:text-white/20 font-bold"
+            />
+            {/* ── Multi-select route checkboxes ── */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] text-white/30 uppercase tracking-[0.2em] font-black">
+                  Assign Allowed Routes
+                </span>
+                {newBusRoutes.length > 0 && (
+                  <span className="text-[9px] text-white/40 bg-white/10 font-black px-2 py-0.5 rounded-full">
+                    {newBusRoutes.length} selected
                   </span>
                 )}
               </div>
-              <button onClick={() => handleDeleteBus(bus.id)} className="p-2 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all">
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="max-h-36 overflow-y-auto bg-brand-dark/60 border border-white/10 rounded-xl p-2 flex flex-col gap-0.5">
+                {routes.length === 0
+                  ? <p className="text-white/20 text-[10px] text-center py-3 font-bold">No routes available</p>
+                  : routes.map((r) => {
+                    const checked = newBusRoutes.includes(r.id);
+                    return (
+                      <label
+                        key={r.id}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${checked ? "bg-white/10" : "hover:bg-white/5"}`}
+                      >
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${checked ? "border-white bg-white" : "border-white/20 bg-transparent"}`}>
+                          {checked && (
+                            <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-brand-dark" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M2 6l3 3 5-5" />
+                            </svg>
+                          )}
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={checked}
+                          onChange={() => toggleRoute(r.id)}
+                        />
+                        <span className={`text-sm font-bold ${checked ? "text-white" : "text-white/50"}`}>{r.name}</span>
+                      </label>
+                    );
+                  })
+                }
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Drivers Section */}
-      <div className="flex-1 bg-brand-surface/40 border border-white/5 shadow-3xl rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-8 flex flex-col">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-            <User className="w-5 h-5 text-white/40" />
+            <button onClick={handleAddBus} className="h-10 bg-white text-brand-dark rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+              <Plus className="w-4 h-4" /> Add Vehicle
+            </button>
           </div>
-          <div>
-            <h2 className="font-bold text-xl tracking-tight" style={{ fontFamily: "Outfit" }}>Driver Personnel</h2>
-            <p className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-black">Manage Operator IDs</p>
+
+          {/* Saved buses */}
+          <div className="bg-brand-surface/40 border border-white/5 rounded-[1.5rem] overflow-hidden">
+            <button
+              onClick={() => setBusListOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Saved Vehicles</span>
+                <span className="text-[9px] bg-white/10 text-white/40 font-black px-2 py-0.5 rounded-full">{buses.length}</span>
+              </div>
+              {busListOpen ? <ChevronUp className="w-3.5 h-3.5 text-white/20" /> : <ChevronDown className="w-3.5 h-3.5 text-white/20" />}
+            </button>
+            {busListOpen && (
+              <div className="px-3 pb-3 flex flex-col gap-2 border-t border-white/5">
+                {busesLoading
+                  ? <p className="text-white/20 text-xs text-center py-4 font-bold">Loading…</p>
+                  : buses.length === 0
+                  ? <p className="text-white/20 text-xs text-center py-4 font-bold uppercase tracking-widest">No vehicles registered.</p>
+                  : buses.map((bus) => {
+                    const isOnline = activeBusIds.has(bus.id);
+                    return (
+                      <div key={bus.id} className="bg-brand-dark/40 border border-white/5 rounded-2xl p-3.5 flex items-center justify-between group">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isOnline ? "bg-emerald-500/20" : "bg-white/5"}`}>
+                            <Bus className={`w-4 h-4 ${isOnline ? "text-emerald-400" : "text-white/30"}`} />
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-white text-sm truncate">{bus.name}</span>
+                            <span className="text-[10px] text-white/30 font-mono tracking-widest">{bus.id}</span>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              {isOnline && (
+                                <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" /> Online
+                                </span>
+                              )}
+                              {bus.assignedRoutes && bus.assignedRoutes.length > 0 ? (
+                                <span className="text-[9px] text-blue-400 font-bold flex items-center gap-1">
+                                  <ArrowRight className="w-2.5 h-2.5" />
+                                  {bus.assignedRoutes.length} Route{bus.assignedRoutes.length !== 1 ? "s" : ""}
+                                </span>
+                              ) : (bus as any).assignedRouteId ? (
+                                <span className="text-[9px] text-blue-400 font-bold flex items-center gap-1">
+                                  <ArrowRight className="w-2.5 h-2.5" />
+                                  {routes.find(r => r.id === (bus as any).assignedRouteId)?.name || (bus as any).assignedRouteId}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                        <button onClick={() => handleDeleteBus(bus.id)} className="p-2 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
           </div>
         </div>
+        )}
 
-        {/* Add Driver Form */}
-        <div className="bg-brand-dark/40 p-5 rounded-[1.5rem] border border-white/5 mb-8 flex flex-col gap-4">
-          <input 
-            type="text" value={newDriverId} onChange={(e) => setNewDriverId(e.target.value)} 
-            placeholder="Operator ID (e.g. drv_1)" 
-            className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm text-white focus:border-white transition-colors placeholder:text-white/20 font-bold"
-          />
-          <input 
-            type="text" value={newDriverName} onChange={(e) => setNewDriverName(e.target.value)} 
-            placeholder="Display Name (e.g. Ravi Kumar)" 
-            className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm text-white focus:border-white transition-colors placeholder:text-white/20 font-bold"
-          />
-          <select 
-            value={newDriverBusId} onChange={(e) => setNewDriverBusId(e.target.value)}
-            className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-sm text-white focus:border-white transition-colors placeholder:text-white/20 font-bold appearance-none"
-          >
-            <option value="">— Unassigned Vehicle —</option>
-            {buses.map(b => <option key={b.id} value={b.id}>{b.name} ({b.id})</option>)}
-          </select>
-
-          <div className="flex flex-col gap-2 mt-2">
-            <span className="text-[10px] text-white/40 uppercase tracking-[0.1em] font-bold">Assign Allowed Routes</span>
-            <div className="max-h-32 overflow-y-auto bg-white/5 border border-white/10 rounded-xl p-2 flex flex-col gap-1 shadow-inner">
-              {routes.map(r => (
-                <label key={r.id} className="flex items-center gap-3 px-3 py-2 hover:bg-white/5 rounded-lg cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    className="accent-white w-4 h-4"
-                    checked={newDriverRoutes.includes(r.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) setNewDriverRoutes([...newDriverRoutes, r.id]);
-                      else setNewDriverRoutes(newDriverRoutes.filter(id => id !== r.id));
-                    }}
-                  />
-                  <span className="text-sm font-bold text-white/80">{r.name}</span>
-                </label>
-              ))}
+        {/* ── DRIVER PERSONNEL ── */}
+        {mode === "personnel" && (
+          <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
+              <User className="w-4 h-4 text-white/40" />
+            </div>
+            <div>
+              <h2 className="font-bold text-lg tracking-tight" style={{ fontFamily: "Outfit" }}>Driver Personnel</h2>
+              <p className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-black">Manage Operator IDs</p>
             </div>
           </div>
 
-          <button onClick={handleAddDriver} className="h-12 bg-white text-brand-dark rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 mt-2">
-            <Plus className="w-4 h-4" /> Add Operator
-          </button>
-        </div>
+          {/* Add form */}
+          <div className="bg-brand-surface/40 border border-white/5 rounded-[1.5rem] p-4 flex flex-col gap-2.5">
+            <p className="text-[9px] text-white/20 font-black uppercase tracking-[0.2em]">Register new operator</p>
+            <input
+              value={newDriverId} onChange={(e) => setNewDriverId(e.target.value)}
+              placeholder="Operator ID (e.g. drv_1)"
+              className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 text-sm text-white focus:border-white/40 outline-none transition-colors placeholder:text-white/20 font-bold"
+            />
+            <input
+              value={newDriverName} onChange={(e) => setNewDriverName(e.target.value)}
+              placeholder="Display Name (e.g. Ravi Kumar)"
+              className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 text-sm text-white focus:border-white/40 outline-none transition-colors placeholder:text-white/20 font-bold"
+            />
+            <div className="relative">
+              <select
+                value={newDriverBusId} onChange={(e) => setNewDriverBusId(e.target.value)}
+                className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 pr-8 text-sm text-white focus:border-white/40 outline-none transition-colors font-bold appearance-none cursor-pointer"
+              >
+                <option value="" className="bg-[#1a1c29]">— Assign Vehicle —</option>
+                {buses.map((b) => <option key={b.id} value={b.id} className="bg-[#1a1c29]">{b.name} ({b.id})</option>)}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" />
+            </div>
 
-        {/* Drivers List */}
-        <div className="flex-1 flex flex-col gap-3 overflow-y-auto">
-          {driversLoading ? <p className="text-white/20 text-xs text-center p-4">Loading...</p> : drivers.length === 0 ? <p className="text-white/20 text-xs text-center p-4 font-bold uppercase tracking-widest">No matching records.</p> : null}
-          {drivers.map(driver => (
-            <div key={driver.id} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between group">
-              <div className="flex flex-col">
-                <span className="font-bold text-white text-sm">{driver.name}</span>
-                <span className="text-[10px] text-white/30 font-mono tracking-widest">{driver.id}</span>
-                {driver.assignedBusId && (
-                  <span className="text-[10px] text-blue-400 font-bold uppercase mt-2 tracking-widest flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3" /> Vehicle: {buses.find(b => b.id === driver.assignedBusId)?.name || driver.assignedBusId}
-                  </span>
-                )}
-                {driver.assignedRoutes && driver.assignedRoutes.length > 0 && (
-                  <span className="text-[10px] text-emerald-400 font-bold uppercase mt-1 tracking-widest flex items-center gap-1">
-                    <ArrowRight className="w-3 h-3" /> Routes: {driver.assignedRoutes.length} Assigned
+
+
+            <button onClick={handleAddDriver} className="h-10 bg-white text-brand-dark rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+              <Plus className="w-4 h-4" /> Add Operator
+            </button>
+          </div>
+
+          {/* Saved drivers */}
+          <div className="bg-brand-surface/40 border border-white/5 rounded-[1.5rem] overflow-hidden">
+            <button
+              onClick={() => setDriverListOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Saved Operators</span>
+                <span className="text-[9px] bg-white/10 text-white/40 font-black px-2 py-0.5 rounded-full">{drivers.length}</span>
+                {liveDrivers.length > 0 && (
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-400 font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
+                    {liveDrivers.length} Live
                   </span>
                 )}
               </div>
-              <button onClick={() => handleDeleteDriver(driver.id)} className="p-2 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+              {driverListOpen ? <ChevronUp className="w-3.5 h-3.5 text-white/20" /> : <ChevronDown className="w-3.5 h-3.5 text-white/20" />}
+            </button>
+            {driverListOpen && (
+              <div className="px-3 pb-3 flex flex-col gap-2 border-t border-white/5">
+                {driversLoading
+                  ? <p className="text-white/20 text-xs text-center py-4 font-bold">Loading…</p>
+                  : drivers.length === 0
+                  ? <p className="text-white/20 text-xs text-center py-4 font-bold uppercase tracking-widest">No operators registered.</p>
+                  : drivers.map((driver) => {
+                    const assignedBus = buses.find((b) => b.id === driver.assignedBusId);
+                    const isDriving = liveDriverIds.has(driver.id);
+                    return (
+                      <div
+                        key={driver.id}
+                        className={`border rounded-2xl p-3.5 flex items-center justify-between group transition-all ${isDriving ? "bg-emerald-500/5 border-emerald-500/20" : "bg-brand-dark/40 border-white/5"}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isDriving ? "bg-emerald-500/20" : "bg-white/5"}`}>
+                            <User className={`w-4 h-4 ${isDriving ? "text-emerald-400" : "text-white/30"}`} />
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-white text-sm truncate">{driver.name}</span>
+                            <span className="text-[10px] text-white/30 font-mono tracking-widest">{driver.id}</span>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              {isDriving ? (
+                                <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
+                                  Online · Driving
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-white/20 font-black uppercase tracking-widest">Offline</span>
+                              )}
+                              {assignedBus && (
+                                <span className="text-[9px] text-blue-400 font-bold flex items-center gap-1">
+                                  <ArrowRight className="w-2.5 h-2.5" /> {assignedBus.name}
+                                </span>
+                              )}
+
+                            </div>
+                          </div>
+                        </div>
+                        <button onClick={() => handleDeleteDriver(driver.id)} className="p-2 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
         </div>
+        )}
       </div>
     </div>
   );

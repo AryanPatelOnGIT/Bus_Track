@@ -5,7 +5,7 @@ import { db } from "@/lib/firebase";
 export interface BusData {
   id: string; // The bus hardware ID e.g. "BRTS-101"
   name: string; // The display name e.g. "Red Line Express"
-  assignedRouteId: string | null; // Route it should run on
+  assignedRoutes?: string[]; // Routes it should run on
 }
 
 export function useBuses() {

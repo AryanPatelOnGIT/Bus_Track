@@ -10,7 +10,7 @@ import {
 } from "@vis.gl/react-google-maps";
 import { RouteData } from "@/hooks/useRoutes";
 import { useGoogleDirections } from "@/hooks/useGoogleDirections";
-import { formatDistance, formatETA, getDistanceMeters } from "@/lib/mapUtils";
+import { formatDistance, formatETA, getDistanceMeters, distanceFromPolyline } from "@/lib/mapUtils";
 import RoutePreviewCards from "@/components/maps/RoutePreviewCards";
 
 export interface DriverMapProps {
@@ -23,9 +23,9 @@ export interface DriverMapProps {
 // ── Constants ──
 const RIPPLE_KEYFRAMES = `
   @keyframes ripple {
-    0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
-    70% { box-shadow: 0 0 0 30px rgba(59, 130, 246, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.5); }
+    70% { box-shadow: 0 0 0 30px rgba(249, 115, 22, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
   }
 `;
 
@@ -65,7 +65,7 @@ const InfoBar = React.memo(function InfoBar({
 });
 
 
-function DriverMapInner({ route, driverLocation, socketRef, busId }: Omit<DriverMapProps, 'targetStop'>) {
+function DriverMapInner({ route, driverLocation, socketRef, busId }: DriverMapProps) {
   const map = useMap();
   const markerLib = useMapsLibrary("marker");
 
@@ -96,7 +96,7 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: Omit<Driver
   const geometryLib = useMapsLibrary("geometry");
 
   // ═══════════════════════════════════════════════════════════════════
-  //  PREVIEW MODE — fetch alternatives (no waypoints for alternatives)
+  //  PREVIEW MODE — fetch full route
   // ═══════════════════════════════════════════════════════════════════
 
   const previewOrigin = useMemo(() => {
@@ -109,6 +109,8 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: Omit<Driver
     stops,
   ]);
 
+  const apiDestination = nextStop ? { lat: nextStop.lat, lng: nextStop.lng } : null;
+
   const {
     allRoutes: previewRoutes,
     routeSummaries,
@@ -117,10 +119,10 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: Omit<Driver
     isLoading: previewLoading,
   } = useGoogleDirections({
     origin: previewOrigin,
-    destination: nextStop ? { lat: nextStop.lat, lng: nextStop.lng } : null,
-    waypoints: [],       // No waypoints → enables alternatives
+    destination: apiDestination,
+    waypoints: [],
     enabled: navPhase === "preview",
-    debounceMs: 8000,    // 8s debounce to cut API calls during early movement
+    debounceMs: 8000,
     provideRouteAlternatives: true,
   });
 
@@ -223,7 +225,30 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: Omit<Driver
     };
   }, [map, navPhase, previewRoutes, previewSelectedIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Draw full navigation route polyline (ZERO API calls, drawn from Firestore)
+  // Live segment navigation path
+  const [navPath, setNavPath] = useState<google.maps.LatLng[]>([]);
+
+  useEffect(() => {
+    if (navPhase !== "navigating" || !nextStop) return;
+
+    // Fetch the segment from current location to nextStop
+    const ds = new google.maps.DirectionsService();
+    const origin = driverLocation 
+      ? new google.maps.LatLng(driverLocation.lat, driverLocation.lng)
+      : new google.maps.LatLng(previewOrigin?.lat || 0, previewOrigin?.lng || 0);
+      
+    ds.route({
+      origin,
+      destination: new google.maps.LatLng(nextStop.lat, nextStop.lng),
+      travelMode: google.maps.TravelMode.DRIVING,
+    }, (res, status) => {
+      if (status === google.maps.DirectionsStatus.OK && res && res.routes[0]) {
+        setNavPath(res.routes[0].overview_path);
+      }
+    });
+  }, [navPhase, nextStop?.id]); // Re-run when target stop changes
+
+  // Draw full navigation route polyline (ZERO API calls, drawn from state)
   useEffect(() => {
     if (!map || navPhase !== "navigating" || !geometryLib) return;
     clearPreviewPolylines();
@@ -238,24 +263,19 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: Omit<Driver
       });
     }
 
-    // Decode and set path immediately
-    if (route.polyline) {
-      try {
-        const decoded = geometryLib.encoding.decodePath(route.polyline);
-        fullPolyRef.current.setPath(decoded);
-      } catch {
-        if (route.waypoints?.length > 0) {
-          fullPolyRef.current.setPath(route.waypoints.map(w => ({ lat: w.lat, lng: w.lng })));
-        }
+    if (navPath.length > 0) {
+      fullPolyRef.current.setPath(navPath);
+    } else {
+      const selected = previewRoutes[previewSelectedIdx];
+      if (selected && selected.overview_path) {
+        fullPolyRef.current.setPath(selected.overview_path);
       }
-    } else if (route.waypoints?.length > 0) {
-      fullPolyRef.current.setPath(route.waypoints.map(w => ({ lat: w.lat, lng: w.lng })));
     }
 
     return () => {
       clearNavPolylines();
     };
-  }, [map, navPhase, geometryLib, route.polyline, route.waypoints]);
+  }, [map, navPhase, geometryLib, navPath, previewRoutes, previewSelectedIdx]);
 
 
   // ═══════════════════════════════════════════════════════════════════
@@ -313,6 +333,72 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: Omit<Driver
 
 
   // ═══════════════════════════════════════════════════════════════════
+  //  OFF-ROUTE DETECTION & RECALCULATION
+  // ═══════════════════════════════════════════════════════════════════
+  
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  
+  const finalStop = stops.length > 0 ? stops[stops.length - 1] : null;
+  const fullWaypoints = useMemo(() => {
+    if (!stops.length || currentStopIndex >= stops.length - 1) return [];
+    const remaining = stops.slice(currentStopIndex, -1);
+    if (remaining.length <= 25) return remaining.map(s => ({ lat: s.lat, lng: s.lng }));
+    const sampled = [];
+    const step = remaining.length / 25;
+    for (let i = 0; i < 25; i++) {
+        const s = remaining[Math.floor(i * step)];
+        sampled.push({ lat: s.lat, lng: s.lng });
+    }
+    return sampled;
+  }, [stops, currentStopIndex]);
+
+  useEffect(() => {
+    if (navPhase !== "navigating" || !driverLocation || !geometryLib || !route.polyline || isRecalculating) return;
+
+    try {
+      const decoded = geometryLib.encoding.decodePath(route.polyline);
+      const polyCoords = decoded.map(p => ({ lat: p.lat(), lng: p.lng() }));
+      
+      const dist = distanceFromPolyline(
+        { lat: driverLocation.lat, lng: driverLocation.lng },
+        polyCoords
+      );
+      
+      if (dist > 150) {
+        setIsRecalculating(true);
+        console.log(`Driver off-route by ${Math.round(dist)}m! Recalculating full route for passengers...`);
+        
+        const ds = new google.maps.DirectionsService();
+        ds.route({
+          origin: new google.maps.LatLng(driverLocation.lat, driverLocation.lng),
+          destination: finalStop ? new google.maps.LatLng(finalStop.lat, finalStop.lng) : new google.maps.LatLng(driverLocation.lat, driverLocation.lng),
+          waypoints: fullWaypoints.map(wp => ({ location: new google.maps.LatLng(wp.lat, wp.lng), stopover: true })),
+          travelMode: google.maps.TravelMode.DRIVING
+        }, async (res, status) => {
+          if (status === google.maps.DirectionsStatus.OK && res && res.routes[0]) {
+             try {
+                const { doc, updateDoc } = await import("firebase/firestore");
+                const { db } = await import("@/lib/firebase");
+                
+                await updateDoc(doc(db, "routes", route.id), {
+                  polyline: res.routes[0].overview_polyline
+                });
+                console.log("Recalculation complete, automatically updated Firebase.");
+             } catch (e) {
+                console.error("Failed to save recalculated route to Firebase", e);
+             }
+          }
+          // Wait briefly before allowing another recalculation check
+          setTimeout(() => setIsRecalculating(false), 8000);
+        });
+      }
+    } catch (err) {
+      console.warn("Off-route math error", err);
+    }
+  }, [driverLocation?.lat, driverLocation?.lng, navPhase, geometryLib, route.polyline, isRecalculating, finalStop, fullWaypoints, route.id]);
+
+
+  // ═══════════════════════════════════════════════════════════════════
   //  MAP CENTERING — only in navigating mode
   // ═══════════════════════════════════════════════════════════════════
 
@@ -338,7 +424,7 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: Omit<Driver
 
   const handlePointerDown = useCallback(() => setIsCentered(false), []);
 
-  const handleStartNavigation = useCallback(() => {
+  const handleStartNavigation = useCallback(async () => {
     setNavPhase("navigating");
     setIsCentered(true);
   }, []);
@@ -378,26 +464,26 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: Omit<Driver
                 // Next target stop — highlighted & animated
                 <div className="relative flex flex-col items-center">
                   <div
-                    className="absolute w-8 h-8 bg-blue-500 rounded-full"
+                    className="absolute w-8 h-8 bg-orange-500 rounded-full"
                     style={{ animation: "ripple 2s infinite" }}
                   />
-                  <div className="w-8 h-8 bg-brand-dark border-4 border-blue-500 rounded-full z-10 flex items-center justify-center">
-                    <span className="text-white font-black text-xs">{i + 1}</span>
+                  <div className="w-8 h-8 bg-orange-500 border-4 border-orange-400 rounded-full z-10 flex items-center justify-center">
+                    <span className="text-white font-black text-xs">{String.fromCharCode(65 + i)}</span>
                   </div>
                   <span className="mt-2 px-3 py-1 bg-brand-surface border border-brand-dark text-white rounded-xl text-[10px] font-bold uppercase tracking-widest z-20 shadow-3xl">
                     {stop.shortName}
                   </span>
                 </div>
               ) : i < currentStopIndex ? (
-                // Already visited — dimmed green
-                <div className="flex items-center justify-center w-6 h-6 bg-emerald-500 border-2 border-brand-dark rounded-full opacity-60 shadow-lg">
-                  <span className="text-brand-dark font-black text-[10px]">{i + 1}</span>
+                // Already visited — dimmed orange
+                <div className="flex items-center justify-center w-6 h-6 bg-orange-500/60 border-2 border-orange-400/50 rounded-full opacity-60 shadow-lg">
+                  <span className="text-white font-black text-[10px]">{String.fromCharCode(65 + i)}</span>
                 </div>
               ) : (
                 // Upcoming — unreached
                 <div className="relative flex flex-col items-center">
-                  <div className="flex items-center justify-center w-6 h-6 bg-white border-2 border-brand-dark rounded-full shadow-lg">
-                    <span className="text-brand-dark font-black text-[10px]">{i + 1}</span>
+                  <div className="flex items-center justify-center w-6 h-6 bg-orange-500 border-2 border-orange-400 rounded-full shadow-lg">
+                    <span className="text-white font-black text-[10px]">{String.fromCharCode(65 + i)}</span>
                   </div>
                   <span className="mt-1 px-2 py-0.5 bg-brand-dark/80 text-white rounded-[4px] text-[8px] whitespace-nowrap opacity-60 font-black uppercase tracking-widest">
                     {stop.shortName}
@@ -451,7 +537,7 @@ function DriverMapInner({ route, driverLocation, socketRef, busId }: Omit<Driver
             {stops.length > 0 && (
               <div className="mb-2 text-center">
                 <span className="text-[9px] font-black uppercase tracking-widest text-white/30">
-                  Stop {currentStopIndex + 1} of {stops.length} — 
+                  Path {String.fromCharCode(65 + Math.max(0, currentStopIndex - (currentStopIndex === 0 ? 0 : 1)))} - {String.fromCharCode(65 + Math.max(1, currentStopIndex))} — 
                 </span>
                 <span className="text-[9px] font-black uppercase tracking-widest text-white/60">
                   {nextStop?.name || "Final Stop"}

@@ -8,6 +8,7 @@ import MessagingPanel from "@/components/shared/MessagingPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoutes } from "@/hooks/useRoutes";
 import { useDrivers } from "@/hooks/useDrivers";
+import { useBuses } from "@/hooks/useBuses";
 import { Navigation, User, MessageSquare } from "lucide-react";
 import { rtdb } from "@/lib/firebase";
 import { ref, set, remove, onDisconnect } from "firebase/database";
@@ -23,7 +24,9 @@ export default function DriverPage() {
   const { user } = useAuth();
   const { routes } = useRoutes();
   const { drivers } = useDrivers();
+  const { buses } = useBuses();
   const [driverId, setDriverId] = useState("");
+  const [selectedBusId, setSelectedBusId] = useState("");
 
   useEffect(() => {
     const saved = localStorage.getItem("driverId");
@@ -32,10 +35,12 @@ export default function DriverPage() {
 
   useEffect(() => {
      if (driverId) localStorage.setItem("driverId", driverId);
+     // Clear manual bus selection when switching drivers
+     setSelectedBusId("");
   }, [driverId]);
 
   const activeDriver = drivers.find(d => d.id === driverId);
-  const busId = activeDriver?.assignedBusId || "";
+  const busId = selectedBusId || activeDriver?.assignedBusId || "";
   
   const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
   const [isTracking, setIsTracking] = useState(false);
@@ -79,6 +84,10 @@ export default function DriverPage() {
       driverId: driverId,
       routeIds: selectedRouteIds
     });
+
+    // Auto-clear messages when driver disconnects abruptly
+    const messagesRef = ref(rtdb, `messages/${busId}`);
+    onDisconnect(messagesRef).remove().catch(() => {});
 
     const writeToFirebase = (loc: { lat: number; lng: number; heading: number; speed: number }) => {
       // Write one entry per selected route so passengers on any of these routes can see the bus
@@ -150,6 +159,11 @@ export default function DriverPage() {
       onDisconnect(busRef).cancel();
     });
     
+    // Clear comm messages
+    const messagesRef = ref(rtdb, `messages/${busId}`);
+    remove(messagesRef).catch(console.error);
+    onDisconnect(messagesRef).cancel();
+    
     socketRef.current?.emit("driver:stop-tracking", { busId });
     if (intervalIdRef.current) {
       clearInterval(intervalIdRef.current);
@@ -186,6 +200,8 @@ export default function DriverPage() {
               busId={busId}
               driverId={driverId}
               setDriverId={setDriverId}
+              buses={buses}
+              setSelectedBusId={setSelectedBusId}
               drivers={drivers}
               selectedRouteIds={selectedRouteIds}
               setSelectedRouteIds={setSelectedRouteIds}

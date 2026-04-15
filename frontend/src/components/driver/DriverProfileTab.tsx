@@ -1,6 +1,12 @@
 "use client";
 
-import { User, ClipboardList, Settings, LogOut, ChevronRight, Wrench, BadgeCheck } from "lucide-react";
+import { useState, useRef } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { useDrivers } from "@/hooks/useDrivers";
+import { db, storage } from "@/lib/firebase";
+import { doc, updateDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { User, ClipboardList, Settings, LogOut, ChevronRight, Wrench, BadgeCheck, Camera, Loader2 } from "lucide-react";
 
 interface Props {
   driverId: string;
@@ -8,14 +14,63 @@ interface Props {
 }
 
 export default function DriverProfileTab({ driverId, busId }: Props) {
+  const { user } = useAuth();
+  const { drivers } = useDrivers();
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const currentDriver = drivers.find(d => d.id === driverId);
+  const displayPhotoUrl = currentDriver?.photoUrl || user?.photoURL;
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploading(true);
+      const storageRef = ref(storage, `drivers/${driverId}-profile`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      
+      await updateDoc(doc(db, "drivers", driverId), {
+        photoUrl: downloadURL
+      });
+    } catch (error) {
+      console.error("Error uploading photo:", error);
+      alert("Failed to upload photo. Please check your network connection.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="flex-1 overflow-y-auto bg-brand-dark p-8 flex flex-col items-center">
       <div className="w-full max-w-lg space-y-12 mt-12">
         {/* Profile Header */}
         <div className="flex flex-col items-center gap-6">
-          <div className="w-28 h-28 rounded-[2.5rem] bg-brand-surface border border-white/5 flex items-center justify-center text-white/10 shadow-3xl relative overflow-hidden">
-             <div className="absolute top-0 left-0 w-16 h-16 bg-white/5 blur-2xl" />
-             <User className="w-12 h-12 text-white/40" />
+          <div 
+            className="w-28 h-28 rounded-[2.5rem] bg-brand-surface border border-white/5 flex items-center justify-center text-white/10 shadow-3xl relative overflow-hidden group cursor-pointer"
+            onClick={() => fileInputRef.current?.click()}
+          >
+             <div className="absolute top-0 left-0 w-16 h-16 bg-white/5 blur-2xl z-0" />
+             
+             {displayPhotoUrl ? (
+               <img src={displayPhotoUrl} alt="Driver" className="w-full h-full object-cover z-10 relative" referrerPolicy="no-referrer" />
+             ) : (
+               <User className="w-12 h-12 text-white/40 z-10 relative" />
+             )}
+
+             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm z-20">
+                {isUploading ? <Loader2 className="w-6 h-6 text-white animate-spin" /> : <Camera className="w-6 h-6 text-white/80" />}
+             </div>
+             
+             <input 
+               type="file" 
+               ref={fileInputRef} 
+               onChange={handlePhotoUpload} 
+               accept="image/*" 
+               className="hidden" 
+             />
           </div>
           <div className="text-center">
             <h2 className="text-3xl font-bold font-display tracking-tight text-white mb-2" style={{ fontFamily: "Outfit, sans-serif" }}>
@@ -47,24 +102,11 @@ export default function DriverProfileTab({ driverId, busId }: Props) {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-6">
-          <div className="bg-brand-surface border border-white/5 rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-2xl transition-transform hover:scale-[1.02]">
-            <span className="text-white/20 text-[10px] font-black uppercase tracking-widest mb-2">Total Hours</span>
-            <span className="text-3xl font-bold text-white tracking-tighter">42.5h</span>
-          </div>
-          <div className="bg-brand-surface border border-white/5 rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-2xl transition-transform hover:scale-[1.02]">
-            <span className="text-white/20 text-[10px] font-black uppercase tracking-widest mb-2">Trips Done</span>
-            <span className="text-3xl font-bold text-white tracking-tighter">18</span>
-          </div>
-        </div>
+
 
         {/* Actions List - Deep Charcoal Mono */}
         <div className="bg-brand-surface border border-white/5 rounded-[2rem] overflow-hidden mt-8 shadow-3xl">
           {[
-            { label: "Shift Log", icon: ClipboardList },
-            { label: "Maintenance Request", icon: Settings },
-            { label: "Operator Settings", icon: Settings },
             { label: "End Shift", icon: LogOut, color: "text-red-400" },
           ].map((item, idx, arr) => (
             <button
