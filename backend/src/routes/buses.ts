@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { activeBuses } from "../sockets/trackingGateway";
+import { requireAdmin } from "../middleware/requireAdmin";
 
 const router = Router();
 
@@ -26,8 +27,8 @@ router.get("/:busId", (req, res) => {
   }
 });
 
-// PATCH bus status (admin override)
-router.patch("/:busId", (req, res) => {
+// PATCH bus status (admin override) — SEC-09 fix: requires Firebase admin token
+router.patch("/:busId", requireAdmin, (req, res) => {
   const { busId } = req.params;
   if (!busId || busId.length > 64) {
     res.status(400).json({ error: "Invalid busId" });

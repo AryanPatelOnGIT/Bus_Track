@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, googleProvider, storage, rtdb, db } from "@/lib/firebase";
+import { auth, googleProvider, rtdb, db } from "@/lib/firebase";
 import { signInWithPopup, onAuthStateChanged, User, signOut } from "firebase/auth";
 import { ref, set } from "firebase/database";
 import { doc, getDoc, setDoc, DocumentSnapshot } from "firebase/firestore";
-import { ref as storageRef, uploadString } from "firebase/storage";
 
 export type UserRole = "passenger" | "driver" | "admin" | null;
 
@@ -103,21 +102,12 @@ export function useAuth() {
           // CRITICAL: Unblock full UI dependencies
           setLoading(false);
 
-          // 💾 BACKUP TO FIREBASE STORAGE (Run entirely in background without awaiting)
-          const credentialFileRef = storageRef(storage, `users/${firebaseUser.uid}/credential.json`);
-          const credentialData = JSON.stringify({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            role,
-            lastLogin: Date.now()
-          }, null, 2);
-          
-          uploadString(credentialFileRef, credentialData, 'raw', {
-            contentType: 'application/json'
-          }).catch((storageErr) => {
-            console.error("Failed to backup to storage:", storageErr);
-          });
+          // ARCH-06 fix: removed Firebase Storage credential backup.
+          // The Firestore `users` document is the single source of truth.
+          // Uploading credential.json on every login was:
+          //   1. Redundant data (already in Firestore)
+          //   2. PII storage without a data-retention policy
+          //   3. Additional auth-path latency
 
         } catch (err) {
           console.error("Error in auth state handler:", err);

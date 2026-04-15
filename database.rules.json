@@ -2,7 +2,9 @@
   "rules": {
     "activeBuses": {
       ".read": true,
-      ".write": "auth != null"
+      "$busId": {
+        ".write": false
+      }
     },
     "messages": {
       "$busId": {

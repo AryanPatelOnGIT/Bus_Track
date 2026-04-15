@@ -11,6 +11,8 @@ import { useDrivers } from "@/hooks/useDrivers";
 import { useBuses } from "@/hooks/useBuses";
 import { Navigation, User, MessageSquare } from "lucide-react";
 import { rtdb } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
+import { getIdToken } from "firebase/auth";
 import { ref, set, remove, onDisconnect } from "firebase/database";
 
 // Mock location state — uses tiny increments instead of random jumps
@@ -51,6 +53,11 @@ export default function DriverPage() {
   // Always-current refs — fixes stale-closure bug in handleStopTracking
   const busIdRef = useRef("");
   const routeIdsRef = useRef<string[]>([]);
+  // ARCH-07 fix: replaces (window as any).__CURRENT_STOP_INDEX anti-pattern
+  const currentStopIndexRef = useRef<number>(0);
+  const handleStopIndexChange = useCallback((index: number) => {
+    currentStopIndexRef.current = index;
+  }, []);
   useEffect(() => { busIdRef.current = busId; }, [busId]);
   useEffect(() => { routeIdsRef.current = selectedRouteIds; }, [selectedRouteIds]);
   
@@ -68,12 +75,32 @@ export default function DriverPage() {
   const activeRoute = routes.find(r => selectedRouteIds.includes(r.id)) || routes.find(r => r.id === selectedRouteIds[0]);
 
   useEffect(() => {
-    import("socket.io-client").then(({ io }) => {
+    // SEC-04: Pass Firebase ID token so the backend socket middleware can verify identity.
+    // If the user isn't signed in yet, we connect without a token and let the server
+    // reject/re-attempt after sign-in — SocketRef stays null until auth resolves.
+    const connectSocket = async () => {
+      const currentUser = auth.currentUser;
+      let token: string | undefined;
+      try {
+        if (currentUser) token = await getIdToken(currentUser);
+      } catch {
+        // Token fetch failed — socket will be rejected by server auth middleware
+        console.warn("[Socket] Failed to get ID token; connection may be rejected");
+      }
+
+      const { io } = await import("socket.io-client");
       const socket = io(process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000", {
         transports: ["websocket"],
+        auth: token ? { token } : {},
       });
       socketRef.current = socket;
-    });
+
+      socket.on("connect_error", (err) => {
+        console.error("[Socket] Connection error:", err.message);
+      });
+    };
+
+    connectSocket();
 
     return () => {
       socketRef.current?.disconnect();
@@ -96,29 +123,9 @@ export default function DriverPage() {
     const messagesRef = ref(rtdb, `messages/${busId}`);
     onDisconnect(messagesRef).remove().catch(() => {});
 
-    const writeToFirebase = (loc: { lat: number; lng: number; heading: number; speed: number; currentStopIndex?: number }) => {
-      // Write one entry per selected route so passengers on any of these routes can see the bus
-      selectedRouteIds.forEach((routeId) => {
-        const busRef = ref(rtdb, `activeBuses/${busId}_${routeId}`);
-        onDisconnect(busRef).remove().catch(() => {});
-        set(busRef, {
-          busId,
-          driverId: driverId,
-          routeId,
-          lat: loc.lat,
-          lng: loc.lng,
-          heading: loc.heading,
-          speed: loc.speed,
-          currentStopIndex: loc.currentStopIndex || 0,
-          status: "active",
-          timestamp: Date.now(),
-        }).catch(console.error);
-      });
-    };
-
     const updateLocation = () => {
-      // Fetch latest known currentStopIndex directly from window if driver map set it
-      const currentIndex = (window as any).__CURRENT_STOP_INDEX || 0;
+      // ARCH-07 fix: read from ref instead of window global
+      const currentIndex = currentStopIndexRef.current;
 
       if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
@@ -130,8 +137,7 @@ export default function DriverPage() {
             };
             const speed = (pos.coords.speed || 0) * 3.6;
             setDriverLocation(newLoc);
-            writeToFirebase({ ...newLoc, speed, currentStopIndex: currentIndex });
-            // Also emit via socket if backend is available
+            // Only emit via socket. Backend will update RTDB.
             socketRef.current?.emit("driver:location-update", {
               busId, driverId,
               lat: newLoc.lat, lng: newLoc.lng, heading: newLoc.heading,
@@ -146,7 +152,6 @@ export default function DriverPage() {
             mockHeading = (mockHeading + (Math.random() - 0.5) * 15 + 360) % 360;
             const mockLoc = { lat: mockLat, lng: mockLng, heading: Math.round(mockHeading) };
             setDriverLocation(mockLoc);
-            writeToFirebase({ ...mockLoc, speed: 15, currentStopIndex: currentIndex });
             socketRef.current?.emit("driver:location-update", {
               busId, driverId,
               lat: mockLoc.lat, lng: mockLoc.lng, heading: mockLoc.heading,
@@ -167,15 +172,8 @@ export default function DriverPage() {
     // Read from refs so we always get the CURRENT busId/routeIds,
     // not the stale closure values captured when the function was created.
     const currentBusId = busIdRef.current;
-    const currentRouteIds = routeIdsRef.current;
 
     setIsTracking(false);
-    // Remove all route entries for this bus from Firebase
-    currentRouteIds.forEach((routeId) => {
-      const busRef = ref(rtdb, `activeBuses/${currentBusId}_${routeId}`);
-      remove(busRef).catch(console.error);
-      onDisconnect(busRef).cancel();
-    });
 
     // Clear comm messages
     const messagesRef = ref(rtdb, `messages/${currentBusId}`);
@@ -212,6 +210,7 @@ export default function DriverPage() {
                 onEndShift={handleStopTracking}
                 isTracking={isTracking}
                 selectedRouteIds={selectedRouteIds}
+                onStopIndexChange={handleStopIndexChange}
               />
             )}
           </div>

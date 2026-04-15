@@ -177,9 +177,19 @@ export default function RouteManagementPanel() {
 
     let bakedPolyline: string | undefined;
     try {
-      const polyRes = await fetch("/api/compute-polyline", {
+      const { auth } = await import("@/lib/firebase");
+      const { getIdToken } = await import("firebase/auth");
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error("Must be logged in to create routes");
+      const token = await getIdToken(currentUser);
+
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+      const polyRes = await fetch(`${backendUrl}/api/routes/compute-polyline`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ waypoints: waypointsForBake }),
       });
       if (!polyRes.ok) {

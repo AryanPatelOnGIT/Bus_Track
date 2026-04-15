@@ -2,26 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 
 const router = Router();
 
-// ── Admin-only middleware ──────────────────────────────────────────────────────
-// The ADMIN_API_SECRET env var is compared against the X-Admin-Secret header.
-// Set this to a long random string and keep it out of the frontend bundle.
-// Without this guard, any external party can burn your Routes API quota instantly.
-function requireAdminSecret(req: Request, res: Response, next: NextFunction): void {
-  const secret = process.env.ADMIN_API_SECRET;
-  if (!secret) {
-    // Fail CLOSED — never allow access when the secret is not configured.
-    // This prevents accidental exposure on fresh deployments or misconfigured CI.
-    console.error("🚨 ADMIN_API_SECRET is not set. Blocking request to compute-polyline.");
-    res.status(503).json({ error: "Server misconfigured: admin secret not set" });
-    return;
-  }
-  const provided = req.headers["x-admin-secret"];
-  if (provided !== secret) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  next();
-}
+import { requireAdmin } from "../middleware/requireAdmin";
 
 // ── Input validation helper ───────────────────────────────────────────────────
 function isValidLatLng(obj: unknown): obj is { lat: number; lng: number } {
@@ -42,7 +23,7 @@ function isValidLatLng(obj: unknown): obj is { lat: number; lng: number } {
  * Protected by admin secret. Validates waypoints before calling Routes API.
  * Failure returns a 4xx/5xx — callers must handle this and NOT silently save.
  */
-router.post("/compute-polyline", requireAdminSecret, async (req: Request, res: Response) => {
+router.post("/compute-polyline", requireAdmin, async (req: Request, res: Response) => {
   const { waypoints } = req.body;
 
   // ── Input validation ──

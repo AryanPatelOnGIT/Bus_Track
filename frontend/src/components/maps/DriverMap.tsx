@@ -24,6 +24,7 @@ export interface DriverMapProps {
   onEndShift?: () => void;
   isTracking?: boolean;
   selectedRouteIds?: string[];
+  onStopIndexChange?: (index: number) => void;
 }
 
 // ── Constants ──
@@ -47,7 +48,7 @@ const REROUTE_COOLDOWN_MS = 20000;
 type NavPhase = "preview" | "navigating";
 
 
-function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, isTracking, selectedRouteIds }: DriverMapProps) {
+function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, isTracking, selectedRouteIds, onStopIndexChange }: DriverMapProps) {
   const map = useMap();
   const markerLib = useMapsLibrary("marker");
 
@@ -81,9 +82,7 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
   const handleManualNextStop = useCallback(() => {
     setCurrentStopIndex(i => {
       const nextIdx = Math.min(i + 1, stops.length - 1);
-      if (typeof window !== "undefined") {
-        (window as any).__CURRENT_STOP_INDEX = nextIdx;
-      }
+      if (onStopIndexChange) onStopIndexChange(nextIdx);
       return nextIdx;
     });
   }, [stops.length]);
@@ -98,9 +97,7 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
     if (dist < 80) {
       setCurrentStopIndex(i => {
         const nextIdx = Math.min(i + 1, stops.length - 1);
-        if (typeof window !== "undefined") {
-          (window as any).__CURRENT_STOP_INDEX = nextIdx;
-        }
+        if (onStopIndexChange) onStopIndexChange(nextIdx);
         return nextIdx;
       });
     }
