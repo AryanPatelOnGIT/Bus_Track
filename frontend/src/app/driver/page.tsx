@@ -46,6 +46,12 @@ export default function DriverPage() {
   const [isTracking, setIsTracking] = useState(false);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number; heading: number } | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("map");
+
+  // Always-current refs — fixes stale-closure bug in handleStopTracking
+  const busIdRef = useRef("");
+  const routeIdsRef = useRef<string[]>([]);
+  useEffect(() => { busIdRef.current = busId; }, [busId]);
+  useEffect(() => { routeIdsRef.current = selectedRouteIds; }, [selectedRouteIds]);
   
   const socketRef = useRef<ReturnType<typeof import("socket.io-client").io> | null>(null);
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
@@ -151,26 +157,31 @@ export default function DriverPage() {
   }, [busId, selectedRouteIds]);
 
   const handleStopTracking = useCallback(() => {
+    // Read from refs so we always get the CURRENT busId/routeIds,
+    // not the stale closure values captured when the function was created.
+    const currentBusId = busIdRef.current;
+    const currentRouteIds = routeIdsRef.current;
+
     setIsTracking(false);
     // Remove all route entries for this bus from Firebase
-    selectedRouteIds.forEach((routeId) => {
-      const busRef = ref(rtdb, `activeBuses/${busId}_${routeId}`);
+    currentRouteIds.forEach((routeId) => {
+      const busRef = ref(rtdb, `activeBuses/${currentBusId}_${routeId}`);
       remove(busRef).catch(console.error);
       onDisconnect(busRef).cancel();
     });
-    
+
     // Clear comm messages
-    const messagesRef = ref(rtdb, `messages/${busId}`);
+    const messagesRef = ref(rtdb, `messages/${currentBusId}`);
     remove(messagesRef).catch(console.error);
     onDisconnect(messagesRef).cancel();
-    
-    socketRef.current?.emit("driver:stop-tracking", { busId });
+
+    socketRef.current?.emit("driver:stop-tracking", { busId: currentBusId });
     if (intervalIdRef.current) {
       clearInterval(intervalIdRef.current);
       intervalIdRef.current = null;
     }
     setDriverLocation(null);
-  }, [busId, selectedRouteIds]);
+  }, []);
 
   const handleRouteUpdate = useCallback((routeIds: string[]) => {
     if (socketRef.current && busId) {
@@ -214,7 +225,7 @@ export default function DriverPage() {
         </div>
         
         <div className={`absolute inset-0 z-10 flex flex-col bg-brand-dark transition-opacity duration-300 ${activeTab === "profile" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-          <DriverProfileTab driverId={driverId || "UNASSIGNED"} busId={busId || "UNASSIGNED"} />
+          <DriverProfileTab driverId={driverId || "UNASSIGNED"} busId={busId || "UNASSIGNED"} onStopTracking={handleStopTracking} isTracking={isTracking} />
         </div>
 
         <div className={`absolute inset-0 z-20 flex flex-col pt-10 bg-brand-dark transition-opacity duration-300 ${activeTab === "messages" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>

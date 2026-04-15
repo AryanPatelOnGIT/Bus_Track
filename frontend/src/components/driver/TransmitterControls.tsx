@@ -49,16 +49,18 @@ export default function TransmitterControls({
   }, [isTracking]);
 
   return (
-    <div className={`flex flex-col w-full bg-brand-surface/90 backdrop-blur-2xl rounded-t-[2.5rem] border-t border-white/5 shadow-3xl transition-all duration-500 overflow-hidden relative`}>
+    <div className={`flex flex-col w-full md:max-w-2xl md:mx-auto bg-brand-surface/90 backdrop-blur-2xl rounded-t-[2.5rem] border-t border-white/5 shadow-3xl transition-all duration-500 overflow-hidden relative`}>
       {/* Drag handle / toggle indicator */}
       <div 
         className="w-full flex justify-center pt-4 pb-2 cursor-pointer group"
         onClick={() => setIsExpanded(!isExpanded)}
+        aria-label={isExpanded ? "Collapse transmitter panel" : "Expand transmitter panel"}
+        role="button"
       >
         <div className="w-12 h-1.5 bg-white/10 rounded-full group-hover:bg-white/20 transition-all" />
       </div>
 
-      <div className={`px-8 gap-8 flex-col ${isExpanded ? 'flex pb-10' : 'hidden'}`}>
+      <div className={`px-6 md:px-8 gap-5 md:gap-6 flex-col overflow-y-auto max-h-[55vh] ${isExpanded ? 'flex pb-8' : 'hidden'}`}>
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -201,7 +203,8 @@ export default function TransmitterControls({
         {/* Expanded Tracking Controls */}
         <div className="pt-4">
           {!isTracking ? (
-            <button
+          <button
+              aria-label="Go live and start transmitting location"
               onClick={onStartTracking}
               disabled={!busId || !driverId || selectedRouteIds.length === 0}
               className="w-full py-5 rounded-[1.5rem] bg-white text-brand-dark font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-3xl flex items-center justify-center gap-3 tracking-[0.1em] disabled:opacity-30 disabled:cursor-not-allowed"
@@ -210,12 +213,13 @@ export default function TransmitterControls({
               GO LIVE
             </button>
           ) : (
-            <button
+          <button
+              aria-label="End shift and stop transmitting"
               onClick={onStopTracking}
               className="w-full py-5 rounded-[1.5rem] bg-red-500 text-white font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-3xl shadow-red-500/20 flex items-center justify-center gap-3 tracking-[0.1em]"
             >
               <Square className="w-4 h-4 fill-white" />
-              TERMINAL FEED
+              END SHIFT
             </button>
           )}
         </div>
@@ -237,10 +241,11 @@ export default function TransmitterControls({
              </div>
           </div>
           <button
+            aria-label="Stop transmitting and go offline"
             onClick={onStopTracking}
             className="h-12 px-6 rounded-2xl bg-white/5 border border-white/5 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white transition-all shadow-2xl"
           >
-            OFFLINE
+            END SHIFT
           </button>
         </div>
       )}

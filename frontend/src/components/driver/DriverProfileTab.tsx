@@ -11,9 +11,11 @@ import { User, ClipboardList, Settings, LogOut, ChevronRight, Wrench, BadgeCheck
 interface Props {
   driverId: string;
   busId: string;
+  onStopTracking: () => void;
+  isTracking: boolean;
 }
 
-export default function DriverProfileTab({ driverId, busId }: Props) {
+export default function DriverProfileTab({ driverId, busId, onStopTracking, isTracking }: Props) {
   const { user } = useAuth();
   const { drivers } = useDrivers();
   const [isUploading, setIsUploading] = useState(false);
@@ -106,24 +108,30 @@ export default function DriverProfileTab({ driverId, busId }: Props) {
 
         {/* Actions List - Deep Charcoal Mono */}
         <div className="bg-brand-surface border border-white/5 rounded-[2rem] overflow-hidden mt-8 shadow-3xl">
-          {[
-            { label: "End Shift", icon: LogOut, color: "text-red-400" },
-          ].map((item, idx, arr) => (
-            <button
-              key={item.label}
-              className={`w-full flex items-center justify-between p-6 bg-transparent hover:bg-white/5 transition-all group ${
-                idx !== arr.length - 1 ? 'border-b border-white/5' : ''
-              }`}
-            >
-              <div className="flex items-center gap-5">
-                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
-                   <item.icon className={`w-5 h-5 ${item.color || 'text-white/30'}`} />
-                </div>
-                <span className={`text-sm font-bold tracking-tight ${item.color || 'text-white/70'}`}>{item.label}</span>
+          <button
+            aria-label="End shift and go offline"
+            disabled={!isTracking}
+            onClick={() => {
+              if (confirm("End your shift and go offline? Passengers will no longer see your bus.")) {
+                onStopTracking();
+              }
+            }}
+            className={`w-full flex items-center justify-between p-6 bg-transparent transition-all group ${
+              isTracking
+                ? 'hover:bg-red-500/10 cursor-pointer'
+                : 'opacity-40 cursor-not-allowed'
+            }`}
+          >
+            <div className="flex items-center gap-5">
+              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-red-500/10 transition-colors">
+                <LogOut className="w-5 h-5 text-red-400" />
               </div>
-              <ChevronRight className="w-4 h-4 text-white/10 group-hover:text-white/40 transition-colors" />
-            </button>
-          ))}
+              <span className="text-sm font-bold tracking-tight text-red-400">
+                {isTracking ? "End Shift" : "Not On Shift"}
+              </span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-white/10 group-hover:text-white/40 transition-colors" />
+          </button>
         </div>
         
         <p className="text-center text-[10px] text-white/10 font-bold uppercase tracking-widest pb-12">Operator ID: {driverId.toUpperCase()}</p>

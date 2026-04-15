@@ -9,7 +9,7 @@ import { db, rtdb } from "@/lib/firebase";
 import { ref, onValue } from "firebase/database";
 import {
   Bus, User, Trash2, Plus, ArrowRight,
-  ChevronDown, ChevronUp, Wifi,
+  ChevronDown, ChevronUp, Wifi, Pencil, Check, X, AlertCircle,
 } from "lucide-react";
 
 // ── Live bus tracking ─────────────────────────────────────────────────────────
@@ -35,6 +35,19 @@ function useActiveBuses(): ActiveBusEntry[] {
   return active;
 }
 
+// ── Inline error banner ───────────────────────────────────────────────────────
+function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl px-3 py-2 text-xs font-bold animate-slide-up">
+      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+      <span className="flex-1">{message}</span>
+      <button onClick={onDismiss} aria-label="Dismiss error" className="shrink-0 hover:text-white transition-colors">
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
 interface Props {
   mode?: "fleet" | "personnel" | "routes";
 }
@@ -46,23 +59,43 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
   const activeEntries = useActiveBuses();
   const activeBusIds = new Set(activeEntries.map((e) => e.busId));
 
-  // Bus form
+  // ── Error state ───────────────────────────────────────────────────────────
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // ── Bus add form ──────────────────────────────────────────────────────────
   const [newBusId, setNewBusId] = useState("");
   const [newBusName, setNewBusName] = useState("");
   const [newBusRoutes, setNewBusRoutes] = useState<string[]>([]);
   const [busListOpen, setBusListOpen] = useState(true);
 
-  // Driver form
+  // ── Bus inline edit ───────────────────────────────────────────────────────
+  const [editingBusId, setEditingBusId] = useState<string | null>(null);
+  const [editBusName, setEditBusName] = useState("");
+  const [editBusRoutes, setEditBusRoutes] = useState<string[]>([]);
+
+  // ── Driver add form ───────────────────────────────────────────────────────
   const [newDriverId, setNewDriverId] = useState("");
   const [newDriverName, setNewDriverName] = useState("");
   const [newDriverBusId, setNewDriverBusId] = useState("");
   const [driverListOpen, setDriverListOpen] = useState(true);
 
+  // ── Driver inline edit ────────────────────────────────────────────────────
+  const [editingDriverId, setEditingDriverId] = useState<string | null>(null);
+  const [editDriverName, setEditDriverName] = useState("");
+  const [editDriverBusId, setEditDriverBusId] = useState("");
+
+  // ── Route togglers ────────────────────────────────────────────────────────
   const toggleRoute = (id: string) =>
     setNewBusRoutes((prev) =>
       prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]
     );
 
+  const toggleEditRoute = (id: string) =>
+    setEditBusRoutes((prev) =>
+      prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]
+    );
+
+  // ── Bus CRUD ──────────────────────────────────────────────────────────────
   const handleAddBus = async () => {
     if (!newBusId || !newBusName) return;
     try {
@@ -72,15 +105,34 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
         assignedRoutes: newBusRoutes,
       } as BusData);
       setNewBusId(""); setNewBusName(""); setNewBusRoutes([]);
-    } catch (e: any) { alert("Failed to add Vehicle: " + e.message); }
+    } catch (e: any) { setErrorMsg("Failed to add Vehicle: " + e.message); }
   };
 
   const handleDeleteBus = async (id: string) => {
-    if (confirm("Delete bus?"))
-      try { await deleteDoc(doc(db, "buses", id)); }
-      catch (e: any) { alert("Failed to delete Vehicle: " + e.message); }
+    if (!confirm("Delete this vehicle? This cannot be undone.")) return;
+    try { await deleteDoc(doc(db, "buses", id)); }
+    catch (e: any) { setErrorMsg("Failed to delete Vehicle: " + e.message); }
   };
 
+  const startEditBus = (bus: BusData) => {
+    setEditingBusId(bus.id);
+    setEditBusName(bus.name);
+    setEditBusRoutes(bus.assignedRoutes ?? []);
+    setEditingDriverId(null); // close any open driver editor
+  };
+
+  const handleSaveBus = async (id: string) => {
+    try {
+      await setDoc(doc(db, "buses", id), {
+        id,
+        name: editBusName,
+        assignedRoutes: editBusRoutes,
+      } as BusData);
+      setEditingBusId(null);
+    } catch (e: any) { setErrorMsg("Failed to update Vehicle: " + e.message); }
+  };
+
+  // ── Driver CRUD ───────────────────────────────────────────────────────────
   const handleAddDriver = async () => {
     if (!newDriverId || !newDriverName) return;
     try {
@@ -90,13 +142,31 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
         assignedBusId: newDriverBusId || null,
       } as DriverData);
       setNewDriverId(""); setNewDriverName(""); setNewDriverBusId("");
-    } catch (e: any) { alert("Failed to add Operator: " + e.message); }
+    } catch (e: any) { setErrorMsg("Failed to add Operator: " + e.message); }
   };
 
   const handleDeleteDriver = async (id: string) => {
-    if (confirm("Delete driver?"))
-      try { await deleteDoc(doc(db, "drivers", id)); }
-      catch (e: any) { alert("Failed to delete Operator: " + e.message); }
+    if (!confirm("Delete this operator? This cannot be undone.")) return;
+    try { await deleteDoc(doc(db, "drivers", id)); }
+    catch (e: any) { setErrorMsg("Failed to delete Operator: " + e.message); }
+  };
+
+  const startEditDriver = (driver: DriverData) => {
+    setEditingDriverId(driver.id);
+    setEditDriverName(driver.name);
+    setEditDriverBusId(driver.assignedBusId ?? "");
+    setEditingBusId(null); // close any open bus editor
+  };
+
+  const handleSaveDriver = async (id: string) => {
+    try {
+      await setDoc(doc(db, "drivers", id), {
+        id,
+        name: editDriverName,
+        assignedBusId: editDriverBusId || null,
+      } as DriverData);
+      setEditingDriverId(null);
+    } catch (e: any) { setErrorMsg("Failed to update Operator: " + e.message); }
   };
 
   // Live drivers = drivers whose ID appears in the active tracking feed
@@ -105,6 +175,11 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 p-3 md:p-6 animate-slide-up">
+
+      {/* ── Global error banner ── */}
+      {errorMsg && (
+        <ErrorBanner message={errorMsg} onDismiss={() => setErrorMsg(null)} />
+      )}
 
       {/* ══ LIVE NOW banner (only when someone is online) ══ */}
       {liveDrivers.length > 0 && (
@@ -166,11 +241,13 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
             <input
               value={newBusId} onChange={(e) => setNewBusId(e.target.value)}
               placeholder="Hardware ID (e.g. BRTS-101)"
+              aria-label="New vehicle hardware ID"
               className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 text-sm text-white focus:border-white/40 outline-none transition-colors placeholder:text-white/20 font-bold"
             />
             <input
               value={newBusName} onChange={(e) => setNewBusName(e.target.value)}
               placeholder="Display Name (e.g. Red Line Express)"
+              aria-label="New vehicle display name"
               className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 text-sm text-white focus:border-white/40 outline-none transition-colors placeholder:text-white/20 font-bold"
             />
             {/* ── Multi-select route checkboxes ── */}
@@ -215,7 +292,11 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
                 }
               </div>
             </div>
-            <button onClick={handleAddBus} className="h-10 bg-white text-brand-dark rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+            <button
+              onClick={handleAddBus}
+              aria-label="Add new vehicle"
+              className="h-10 bg-white text-brand-dark rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
               <Plus className="w-4 h-4" /> Add Vehicle
             </button>
           </div>
@@ -224,6 +305,7 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
           <div className="bg-brand-surface/40 border border-white/5 rounded-[1.5rem] overflow-hidden">
             <button
               onClick={() => setBusListOpen((o) => !o)}
+              aria-label={busListOpen ? "Collapse saved vehicles" : "Expand saved vehicles"}
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <div className="flex items-center gap-2">
@@ -240,38 +322,97 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
                   ? <p className="text-white/20 text-xs text-center py-4 font-bold uppercase tracking-widest">No vehicles registered.</p>
                   : buses.map((bus) => {
                     const isOnline = activeBusIds.has(bus.id);
+                    const isEditing = editingBusId === bus.id;
+
                     return (
-                      <div key={bus.id} className="bg-brand-dark/40 border border-white/5 rounded-2xl p-3.5 flex items-center justify-between group">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isOnline ? "bg-emerald-500/20" : "bg-white/5"}`}>
-                            <Bus className={`w-4 h-4 ${isOnline ? "text-emerald-400" : "text-white/30"}`} />
-                          </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="font-bold text-white text-sm truncate">{bus.name}</span>
-                            <span className="text-[10px] text-white/30 font-mono tracking-widest">{bus.id}</span>
-                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                              {isOnline && (
-                                <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" /> Online
-                                </span>
-                              )}
-                              {bus.assignedRoutes && bus.assignedRoutes.length > 0 ? (
-                                <span className="text-[9px] text-blue-400 font-bold flex items-center gap-1">
-                                  <ArrowRight className="w-2.5 h-2.5" />
-                                  {bus.assignedRoutes.length} Route{bus.assignedRoutes.length !== 1 ? "s" : ""}
-                                </span>
-                              ) : (bus as any).assignedRouteId ? (
-                                <span className="text-[9px] text-blue-400 font-bold flex items-center gap-1">
-                                  <ArrowRight className="w-2.5 h-2.5" />
-                                  {routes.find(r => r.id === (bus as any).assignedRouteId)?.name || (bus as any).assignedRouteId}
-                                </span>
-                              ) : null}
+                      <div key={bus.id} className="bg-brand-dark/40 border border-white/5 rounded-2xl overflow-hidden">
+                        {/* Card header row */}
+                        <div className="p-3.5 flex items-center justify-between gap-2 group">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isOnline ? "bg-emerald-500/20" : "bg-white/5"}`}>
+                              <Bus className={`w-4 h-4 ${isOnline ? "text-emerald-400" : "text-white/30"}`} />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-bold text-white text-sm truncate">{bus.name}</span>
+                              <span className="text-[10px] text-white/30 font-mono tracking-widest">{bus.id}</span>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                {isOnline && (
+                                  <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" /> Online
+                                  </span>
+                                )}
+                                {bus.assignedRoutes && bus.assignedRoutes.length > 0 ? (
+                                  <span className="text-[9px] text-blue-400 font-bold flex items-center gap-1">
+                                    <ArrowRight className="w-2.5 h-2.5" />
+                                    {bus.assignedRoutes.length} Route{bus.assignedRoutes.length !== 1 ? "s" : ""}
+                                  </span>
+                                ) : (bus as any).assignedRouteId ? (
+                                  <span className="text-[9px] text-blue-400 font-bold flex items-center gap-1">
+                                    <ArrowRight className="w-2.5 h-2.5" />
+                                    {routes.find(r => r.id === (bus as any).assignedRouteId)?.name || (bus as any).assignedRouteId}
+                                  </span>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => isEditing ? setEditingBusId(null) : startEditBus(bus)}
+                              aria-label={isEditing ? "Cancel editing vehicle" : `Edit vehicle ${bus.name}`}
+                              className="p-3 rounded-lg text-white/20 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
+                            >
+                              {isEditing ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBus(bus.id)}
+                              aria-label={`Delete vehicle ${bus.name}`}
+                              className="p-3 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <button onClick={() => handleDeleteBus(bus.id)} className="p-2 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+
+                        {/* Inline edit panel */}
+                        {isEditing && (
+                          <div className="border-t border-white/5 px-4 pb-4 pt-3 flex flex-col gap-2.5 bg-brand-dark/30">
+                            <p className="text-[9px] text-blue-400 font-black uppercase tracking-[0.2em]">Editing Vehicle</p>
+                            <input
+                              value={editBusName}
+                              onChange={(e) => setEditBusName(e.target.value)}
+                              placeholder="Display Name"
+                              aria-label="Edit vehicle display name"
+                              className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 text-sm text-white focus:border-blue-400/60 outline-none transition-colors placeholder:text-white/20 font-bold"
+                            />
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[9px] text-white/30 uppercase tracking-[0.2em] font-black">Assigned Routes</span>
+                              <div className="max-h-32 overflow-y-auto bg-brand-dark/60 border border-white/10 rounded-xl p-2 flex flex-col gap-0.5">
+                                {routes.length === 0
+                                  ? <p className="text-white/20 text-[10px] text-center py-3 font-bold">No routes available</p>
+                                  : routes.map((r) => {
+                                    const checked = editBusRoutes.includes(r.id);
+                                    return (
+                                      <label key={r.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${checked ? "bg-white/10" : "hover:bg-white/5"}`}>
+                                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${checked ? "border-white bg-white" : "border-white/20 bg-transparent"}`}>
+                                          {checked && <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-brand-dark" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M2 6l3 3 5-5" /></svg>}
+                                        </div>
+                                        <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleEditRoute(r.id)} />
+                                        <span className={`text-sm font-bold ${checked ? "text-white" : "text-white/50"}`}>{r.name}</span>
+                                      </label>
+                                    );
+                                  })
+                                }
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleSaveBus(bus.id)}
+                              aria-label="Save vehicle changes"
+                              className="h-9 bg-blue-500 text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                            >
+                              <Check className="w-4 h-4" /> Save Changes
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -300,16 +441,19 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
             <input
               value={newDriverId} onChange={(e) => setNewDriverId(e.target.value)}
               placeholder="Operator ID (e.g. drv_1)"
+              aria-label="New operator ID"
               className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 text-sm text-white focus:border-white/40 outline-none transition-colors placeholder:text-white/20 font-bold"
             />
             <input
               value={newDriverName} onChange={(e) => setNewDriverName(e.target.value)}
               placeholder="Display Name (e.g. Ravi Kumar)"
+              aria-label="New operator display name"
               className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 text-sm text-white focus:border-white/40 outline-none transition-colors placeholder:text-white/20 font-bold"
             />
             <div className="relative">
               <select
                 value={newDriverBusId} onChange={(e) => setNewDriverBusId(e.target.value)}
+                aria-label="Assign vehicle to new operator"
                 className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 pr-8 text-sm text-white focus:border-white/40 outline-none transition-colors font-bold appearance-none cursor-pointer"
               >
                 <option value="" className="bg-[#1a1c29]">— Assign Vehicle —</option>
@@ -317,10 +461,11 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" />
             </div>
-
-
-
-            <button onClick={handleAddDriver} className="h-10 bg-white text-brand-dark rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+            <button
+              onClick={handleAddDriver}
+              aria-label="Add new operator"
+              className="h-10 bg-white text-brand-dark rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
               <Plus className="w-4 h-4" /> Add Operator
             </button>
           </div>
@@ -329,6 +474,7 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
           <div className="bg-brand-surface/40 border border-white/5 rounded-[1.5rem] overflow-hidden">
             <button
               onClick={() => setDriverListOpen((o) => !o)}
+              aria-label={driverListOpen ? "Collapse saved operators" : "Expand saved operators"}
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <div className="flex items-center gap-2">
@@ -352,39 +498,89 @@ export default function FleetManagementPanel({ mode = "fleet" }: Props) {
                   : drivers.map((driver) => {
                     const assignedBus = buses.find((b) => b.id === driver.assignedBusId);
                     const isDriving = liveDriverIds.has(driver.id);
+                    const isEditing = editingDriverId === driver.id;
+
                     return (
                       <div
                         key={driver.id}
-                        className={`border rounded-2xl p-3.5 flex items-center justify-between group transition-all ${isDriving ? "bg-emerald-500/5 border-emerald-500/20" : "bg-brand-dark/40 border-white/5"}`}
+                        className={`border rounded-2xl overflow-hidden transition-all ${isDriving ? "bg-emerald-500/5 border-emerald-500/20" : "bg-brand-dark/40 border-white/5"}`}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isDriving ? "bg-emerald-500/20" : "bg-white/5"}`}>
-                            <User className={`w-4 h-4 ${isDriving ? "text-emerald-400" : "text-white/30"}`} />
-                          </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="font-bold text-white text-sm truncate">{driver.name}</span>
-                            <span className="text-[10px] text-white/30 font-mono tracking-widest">{driver.id}</span>
-                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                              {isDriving ? (
-                                <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
-                                  Online · Driving
-                                </span>
-                              ) : (
-                                <span className="text-[9px] text-white/20 font-black uppercase tracking-widest">Offline</span>
-                              )}
-                              {assignedBus && (
-                                <span className="text-[9px] text-blue-400 font-bold flex items-center gap-1">
-                                  <ArrowRight className="w-2.5 h-2.5" /> {assignedBus.name}
-                                </span>
-                              )}
-
+                        {/* Card header row */}
+                        <div className="p-3.5 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isDriving ? "bg-emerald-500/20" : "bg-white/5"}`}>
+                              <User className={`w-4 h-4 ${isDriving ? "text-emerald-400" : "text-white/30"}`} />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-bold text-white text-sm truncate">{driver.name}</span>
+                              <span className="text-[10px] text-white/30 font-mono tracking-widest">{driver.id}</span>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                {isDriving ? (
+                                  <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
+                                    Online · Driving
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] text-white/20 font-black uppercase tracking-widest">Offline</span>
+                                )}
+                                {assignedBus && (
+                                  <span className="text-[9px] text-blue-400 font-bold flex items-center gap-1">
+                                    <ArrowRight className="w-2.5 h-2.5" /> {assignedBus.name}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => isEditing ? setEditingDriverId(null) : startEditDriver(driver)}
+                              aria-label={isEditing ? "Cancel editing operator" : `Edit operator ${driver.name}`}
+                              className="p-3 rounded-lg text-white/20 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
+                            >
+                              {isEditing ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDriver(driver.id)}
+                              aria-label={`Delete operator ${driver.name}`}
+                              className="p-3 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <button onClick={() => handleDeleteDriver(driver.id)} className="p-2 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+
+                        {/* Inline edit panel */}
+                        {isEditing && (
+                          <div className="border-t border-white/5 px-4 pb-4 pt-3 flex flex-col gap-2.5 bg-brand-dark/30">
+                            <p className="text-[9px] text-blue-400 font-black uppercase tracking-[0.2em]">Editing Operator</p>
+                            <input
+                              value={editDriverName}
+                              onChange={(e) => setEditDriverName(e.target.value)}
+                              placeholder="Display Name"
+                              aria-label="Edit operator display name"
+                              className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 text-sm text-white focus:border-blue-400/60 outline-none transition-colors placeholder:text-white/20 font-bold"
+                            />
+                            <div className="relative">
+                              <select
+                                value={editDriverBusId}
+                                onChange={(e) => setEditDriverBusId(e.target.value)}
+                                aria-label="Edit assigned vehicle"
+                                className="w-full h-10 bg-brand-dark/60 border border-white/10 rounded-xl px-3 pr-8 text-sm text-white focus:border-blue-400/60 outline-none transition-colors font-bold appearance-none cursor-pointer"
+                              >
+                                <option value="" className="bg-[#1a1c29]">— Unassign Vehicle —</option>
+                                {buses.map((b) => <option key={b.id} value={b.id} className="bg-[#1a1c29]">{b.name} ({b.id})</option>)}
+                              </select>
+                              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" />
+                            </div>
+                            <button
+                              onClick={() => handleSaveDriver(driver.id)}
+                              aria-label="Save operator changes"
+                              className="h-9 bg-blue-500 text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                            >
+                              <Check className="w-4 h-4" /> Save Changes
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

@@ -12,8 +12,6 @@ export default function Footer() {
           <p style={{ fontSize: 13, color: "#a1a1a6" }}>Copyright © 2025 BusTrack. All rights reserved.</p>
           <div style={{ display: "flex", gap: "24px" }}>
             <Link href="/passenger" style={{ fontSize: 13, color: "#a1a1a6", textDecoration: "none" }} className="hover:text-white transition-colors">Passenger View</Link>
-            <Link href="/driver" style={{ fontSize: 13, color: "#a1a1a6", textDecoration: "none" }} className="hover:text-white transition-colors">Driver View</Link>
-            <Link href="/admin" style={{ fontSize: 13, color: "#a1a1a6", textDecoration: "none" }} className="hover:text-white transition-colors">Admin Area</Link>
           </div>
         </div>
       </div>

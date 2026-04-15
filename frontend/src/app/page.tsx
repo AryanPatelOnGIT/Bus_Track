@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Bus, MapPin, Navigation, LayoutDashboard, Wifi, Star, Bell, ShieldCheck, Loader2, LogIn } from "lucide-react";
-import "@fontsource/inter";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
