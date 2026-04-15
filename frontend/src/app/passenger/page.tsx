@@ -11,6 +11,7 @@ import { Map as MapIcon, User, Loader2, MessageSquare } from "lucide-react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, off } from "firebase/database";
 import { buzzController } from "@/lib/audioUtils";
+import RouteTimelineSheet from "@/components/passenger/RouteTimelineSheet";
 
 type Tab = "map" | "account";
 
@@ -242,8 +243,15 @@ export default function PassengerPage() {
         />
       )}
 
+      {/* Navigation Timeline Bottom Sheet (Moovit-style) */}
+      <RouteTimelineSheet 
+        route={activeRoute || null} 
+        targetStopId={selectedStopId} 
+        activeBusId={activeBusOnRoute}
+      />
+
       {/* Bottom Navigation */}
-      <nav className="shrink-0 bg-brand-surface/80 border-t border-white/5 backdrop-blur-2xl pb-safe">
+      <nav className="relative z-50 shrink-0 bg-brand-surface/80 border-t border-white/5 backdrop-blur-2xl pb-safe">
         <div className="flex items-center justify-around px-4 py-2 max-w-md mx-auto">
           <button
             onClick={() => setActiveTab("map")}
