@@ -21,6 +21,7 @@ interface Props {
   onStartTracking: () => void;
   onStopTracking: () => void;
   onRouteUpdate?: (routeIds: string[]) => void;
+  isSocketConnected?: boolean;
 }
 
 export default function TransmitterControls({
@@ -36,6 +37,7 @@ export default function TransmitterControls({
   onStartTracking,
   onStopTracking,
   onRouteUpdate,
+  isSocketConnected = false,
 }: Props) {
   const [isExpanded, setIsExpanded] = useState(true);
   const { routes } = useRoutes();
@@ -201,11 +203,20 @@ export default function TransmitterControls({
           <button
               aria-label="Go live and start transmitting location"
               onClick={onStartTracking}
-              disabled={!busId || !driverId || selectedRouteIds.length === 0}
+              disabled={!busId || !driverId || selectedRouteIds.length === 0 || !isSocketConnected}
               className="w-full py-5 rounded-[1.5rem] bg-white text-brand-dark font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-3xl flex items-center justify-center gap-3 tracking-[0.1em] disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              <Play className="w-4 h-4 fill-brand-dark" />
-              GO LIVE
+              {!isSocketConnected ? (
+                <>
+                  <span className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
+                  CONNECTING…
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 fill-brand-dark" />
+                  GO LIVE
+                </>
+              )}
             </button>
           ) : (
           <button

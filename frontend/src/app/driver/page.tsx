@@ -50,9 +50,12 @@ export default function DriverPage() {
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
+
   const busIdRef = useRef("");
   const routeIdsRef = useRef<string[]>([]);
   const currentStopIndexRef = useRef<number>(0);
+  const isTrackingRef = useRef(false); // used inside socket callbacks
   const handleStopIndexChange = useCallback((index: number) => {
     currentStopIndexRef.current = index;
   }, []);
@@ -100,10 +103,22 @@ export default function DriverPage() {
 
       socket.on("connect", () => {
         console.log("[Socket] Connected to backend:", socket.id);
+        setIsSocketConnected(true);
+        // If driver was already tracking (e.g. socket reconnected), re-register
+        if (isTrackingRef.current && busIdRef.current) {
+          socket.emit("driver:start-tracking", {
+            busId: busIdRef.current,
+            driverId,
+            routeIds: routeIdsRef.current,
+          });
+          console.log("[Socket] Re-emitted driver:start-tracking after reconnect");
+        }
+      });
+      socket.on("disconnect", () => {
+        setIsSocketConnected(false);
       });
       socket.on("reconnect_attempt", (n) => {
         console.log(`[Socket] Reconnect attempt #${n}…`);
-        // Wake Render on each reconnect attempt
         fetch(`${backendUrl}/health`, { method: "GET", mode: "cors" }).catch(() => {});
       });
       socket.on("connect_error", (err) => {
@@ -122,6 +137,7 @@ export default function DriverPage() {
   const handleStartTracking = useCallback(() => {
     if (!busId) return;
     setIsTracking(true);
+    isTrackingRef.current = true;
 
     socketRef.current?.emit("driver:start-tracking", {
       busId,
@@ -149,7 +165,8 @@ export default function DriverPage() {
               busId, driverId,
               lat: newLoc.lat, lng: newLoc.lng, heading: newLoc.heading,
               speed, timestamp: pos.timestamp, status: "active",
-              currentStopIndex: currentIndex
+              currentStopIndex: currentIndex,
+              routeIds: routeIdsRef.current, // always send so backend can self-heal
             });
           },
           () => {
@@ -162,7 +179,8 @@ export default function DriverPage() {
               busId, driverId,
               lat: mockLoc.lat, lng: mockLoc.lng, heading: mockLoc.heading,
               speed: 15, timestamp: Date.now(), status: "active",
-              currentStopIndex: currentIndex
+              currentStopIndex: currentIndex,
+              routeIds: routeIdsRef.current, // always send so backend can self-heal
             });
           },
           { enableHighAccuracy: true, timeout: 5000 }
@@ -177,6 +195,7 @@ export default function DriverPage() {
   const handleStopTracking = useCallback(() => {
     const currentBusId = busIdRef.current;
     setIsTracking(false);
+    isTrackingRef.current = false;
     const messagesRef = ref(rtdb, `messages/${currentBusId}`);
     remove(messagesRef).catch(console.error);
     onDisconnect(messagesRef).cancel();
@@ -235,6 +254,7 @@ export default function DriverPage() {
                 onStartTracking={handleStartTracking}
                 onStopTracking={handleStopTracking}
                 onRouteUpdate={handleRouteUpdate}
+                isSocketConnected={isSocketConnected}
               />
             </div>
           )}

@@ -295,7 +295,19 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
         return;
       }
 
-      const metadata = busMetadata.get(data.busId);
+      let metadata = busMetadata.get(data.busId);
+
+      // ── Self-heal: if backend restarted and lost in-memory state, recover
+      // metadata from the payload. The driver always sends routeIds.
+      if (!metadata && (Array.isArray(data.routeIds) && data.routeIds.length > 0)) {
+        const parsedRouteIds = data.routeIds as string[];
+        metadata = { routeId: parsedRouteIds[0], routeIds: parsedRouteIds };
+        busMetadata.set(data.busId, metadata);
+        socketBusMap.set(socket.id, data.busId);
+        socket.join(`bus:${data.busId}`);
+        console.log(`[driver:location-update] Self-healed metadata for ${data.busId} from payload`);
+      }
+
       const busLocation: BusLocation = {
         busId: data.busId,
         driverId: data.driverId,
@@ -311,6 +323,9 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
 
       activeBuses.set(data.busId, busLocation);
       setRTDBLocation(data.busId, data.driverId, metadata?.routeIds || [], busLocation);
+      if ((metadata?.routeIds || []).length === 0) {
+        console.warn(`[driver:location-update] No routeIds for ${data.busId} — RTDB not written. Payload:`, JSON.stringify(data));
+      }
 
       // ── PERSISTENCE: Live location write (independent try/catch) ──
       try {
