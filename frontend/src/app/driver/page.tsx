@@ -77,21 +77,34 @@ export default function DriverPage() {
       try {
         if (currentUser) token = await getIdToken(currentUser);
       } catch {
-        console.warn("[Socket] Failed to get ID token; connection may be rejected");
+        console.warn("[Socket] Failed to get ID token; connecting as anonymous");
       }
 
+      // Wake up Render backend before connecting (free tier cold start can take 30-60s)
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "https://bustrack-backend.onrender.com";
+      fetch(`${backendUrl}/health`, { method: "GET", mode: "cors" }).catch(() => {});
+
       const { io } = await import("socket.io-client");
-      const socket = io(process.env.NEXT_PUBLIC_BACKEND_URL || "https://bustrack-backend.onrender.com", {
-        transports: ["websocket", "polling"],
+      const socket = io(backendUrl, {
+        // Polling-first: more reliable through Render's HTTP proxy.
+        // Automatically upgrades to WebSocket once the connection is stable.
+        transports: ["polling", "websocket"],
         auth: token ? { token } : {},
         reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelay: 2000,
+        reconnectionAttempts: 20,
+        reconnectionDelay: 3000,
+        reconnectionDelayMax: 10000,
+        timeout: 60000, // Render free tier can take 30-60s to cold-start
       });
       socketRef.current = socket;
 
       socket.on("connect", () => {
         console.log("[Socket] Connected to backend:", socket.id);
+      });
+      socket.on("reconnect_attempt", (n) => {
+        console.log(`[Socket] Reconnect attempt #${n}…`);
+        // Wake Render on each reconnect attempt
+        fetch(`${backendUrl}/health`, { method: "GET", mode: "cors" }).catch(() => {});
       });
       socket.on("connect_error", (err) => {
         console.error("[Socket] Connection error:", err.message);

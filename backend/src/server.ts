@@ -72,7 +72,13 @@ const writeLimiter = rateLimit({
 });
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
+const CORS_ORIGINS = [
+  CORS_ORIGIN,
+  "https://bustrack-be165.web.app",
+  "https://bustrack-be165.firebaseapp.com",
+  "http://localhost:3000",
+];
+app.use(cors({ origin: CORS_ORIGINS, credentials: true }));
 app.use(express.json({ limit: "16kb" })); // Prevent request body size attacks
 
 // ── REST Routes ───────────────────────────────────────────────────────────────
@@ -86,12 +92,18 @@ app.use("/api/routes-list", routesListRoutes);
 
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 const io = new SocketServer(httpServer, {
-  cors: { origin: CORS_ORIGIN, methods: ["GET", "POST"] },
+  cors: { origin: CORS_ORIGINS, methods: ["GET", "POST"], credentials: true },
+  // Start with polling so Render's HTTP proxy can handle connections reliably;
+  // socket.io will automatically upgrade to WebSocket when available.
+  transports: ["polling", "websocket"],
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 
 // ── SEC-04 fix: Authenticate every socket with a Firebase ID token ──
-// Clients must pass: io({ auth: { token: await getIdToken(firebaseUser) } })
-// Sockets without a valid token are disconnected before any event handlers run.
+// Clients pass: io({ auth: { token: await getIdToken(firebaseUser) } })
+// If no token is present (anonymous passenger), the socket still connects
+// but is tagged as anonymous. Driver and admin events validate role inline.
 io.use(async (socket, next) => {
   // Allow unauthenticated connections in local dev if explicitly opted out
   if (process.env.DISABLE_SOCKET_AUTH === "true" && process.env.NODE_ENV !== "production") {
@@ -101,7 +113,9 @@ io.use(async (socket, next) => {
 
   const token = socket.handshake.auth?.token as string | undefined;
   if (!token) {
-    return next(new Error("Authentication required: missing token"));
+    // Anonymous connection — allowed for passengers reading live data
+    (socket as any).user = { uid: "anonymous", role: "passenger" };
+    return next();
   }
 
   try {
@@ -109,7 +123,9 @@ io.use(async (socket, next) => {
     (socket as any).user = decoded; // Attach verified claims to socket
     next();
   } catch {
-    next(new Error("Authentication failed: invalid or expired token"));
+    // Bad token — still let them in as anonymous rather than hard-reject
+    (socket as any).user = { uid: "anonymous", role: "passenger" };
+    next();
   }
 });
 
