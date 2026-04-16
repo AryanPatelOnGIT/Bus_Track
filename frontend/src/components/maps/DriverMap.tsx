@@ -520,10 +520,9 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
         </GoogleMap>
       </div>
 
-      {/* ── Top-left: Back button moves to top-RIGHT corner ── */}
-      {/* ── Top-right: Back (navigating → preview) + Recenter ── */}
-      <div className="absolute right-4 top-10 z-40 flex flex-col gap-3">
-        {navPhase === "navigating" && (
+      {/* ── Top-LEFT: Back button ── */}
+      {navPhase === "navigating" && (
+        <div className="absolute left-4 top-10 z-40">
           <button
             onClick={handleBackToPreview}
             className="p-4 rounded-full shadow-2xl bg-brand-surface border border-white/10 text-white active:scale-95 transition-all"
@@ -531,7 +530,11 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-        )}
+        </div>
+      )}
+
+      {/* ── Top-RIGHT: Recenter ── */}
+      <div className="absolute right-4 top-10 z-40">
         <button
           onClick={handleRecenter}
           className={`p-4 rounded-full shadow-2xl transition-all duration-300 border active:scale-95 ${
@@ -545,8 +548,8 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
         </button>
       </div>
 
-      {/* ── Bottom Panel ── */}
-      <div className="absolute bottom-6 left-0 right-0 z-50">
+      {/* ── Bottom Panel — fixed above nav bar so nothing is clipped ── */}
+      <div className="absolute bottom-[70px] left-0 right-0 z-50">
         {navPhase === "preview" ? (
           <RoutePreviewCards
             routes={routeSummaries}

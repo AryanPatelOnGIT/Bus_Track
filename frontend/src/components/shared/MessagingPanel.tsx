@@ -21,6 +21,7 @@ interface Props {
   currentUserName: string;
   onClose?: () => void;
   isOverlay?: boolean;
+  onUnreadCountChange?: (count: number) => void;
 }
 
 export default function MessagingPanel({ 
@@ -29,11 +30,13 @@ export default function MessagingPanel({
   currentUserId, 
   currentUserName, 
   onClose,
-  isOverlay = false
+  isOverlay = false,
+  onUnreadCountChange,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastSeenCountRef = useRef(0);
 
   useEffect(() => {
     if (!busId) return;
@@ -47,6 +50,16 @@ export default function MessagingPanel({
           ...val
         })).sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
         setMessages(msgs);
+
+        // Count messages from others to surface unread badge
+        if (onUnreadCountChange) {
+          const othersCount = msgs.filter((m: any) => m.senderId !== currentUserId).length;
+          if (othersCount > lastSeenCountRef.current) {
+            onUnreadCountChange(othersCount - lastSeenCountRef.current);
+          }
+          lastSeenCountRef.current = othersCount;
+        }
+
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
         }, 100);

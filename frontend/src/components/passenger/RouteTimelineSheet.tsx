@@ -44,8 +44,8 @@ export default function RouteTimelineSheet({
 
       {/* Sheet */}
       <div
-        className={`fixed inset-x-0 bottom-[60px] z-50 bg-brand-dark border-t border-white/10 rounded-t-3xl shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-          isOpen ? "translate-y-0" : "translate-y-[calc(100%-60px)]"
+        className={`fixed inset-x-0 bottom-[64px] z-50 bg-brand-dark border-t border-white/10 rounded-t-3xl shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          isOpen ? "translate-y-0" : "translate-y-[calc(100%-64px)]"
         }`}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
