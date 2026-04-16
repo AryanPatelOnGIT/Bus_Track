@@ -81,7 +81,7 @@ function isValidSpeed(s: unknown): boolean {
 // Helper to update RTDB securely from backend
 async function setRTDBLocation(busId: string, driverId: string, routeIds: string[], loc: BusLocation) {
   routeIds.forEach(routeId => {
-    rtdb.ref(`activeBuses/${busId}_${routeId}`).set({
+    const payload: any = {
       busId: loc.busId,
       driverId: loc.driverId,
       routeId,
@@ -91,7 +91,15 @@ async function setRTDBLocation(busId: string, driverId: string, routeIds: string
       speed: loc.speed,
       status: loc.status,
       timestamp: loc.timestamp,
-    }).catch((err: any) => console.error(`[RTDB] Failed to update active bus for ${busId}_${routeId}:`, err));
+      currentStopIndex: loc.currentStopIndex,
+      delayMinutes: loc.delayMinutes
+    };
+
+    // Remove undefined values to prevent Firebase Admin SDK crashes
+    Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+    rtdb.ref(`activeBuses/${busId}_${routeId}`).set(payload)
+      .catch((err: any) => console.error(`[RTDB] Failed to update active bus for ${busId}_${routeId}:`, err));
   });
 }
 
