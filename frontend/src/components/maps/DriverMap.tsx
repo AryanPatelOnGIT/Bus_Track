@@ -180,6 +180,7 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
 
   const previewPolylinesRef = useRef<google.maps.Polyline[]>([]);
   const fullPolyRef = useRef<google.maps.Polyline | null>(null);
+  const activePolyRef = useRef<google.maps.Polyline | null>(null);
 
   const clearPreviewPolylines = useCallback(() => {
     previewPolylinesRef.current.forEach(p => p.setMap(null));
@@ -188,7 +189,9 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
 
   const clearNavPolylines = useCallback(() => {
     fullPolyRef.current?.setMap(null);
+    activePolyRef.current?.setMap(null);
     fullPolyRef.current = null;
+    activePolyRef.current = null;
   }, []);
 
   // Draw preview polylines when routes change
@@ -253,26 +256,57 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
     if (!map || navPhase !== "navigating" || !geometryLib) return;
     clearPreviewPolylines();
 
-    if (!fullPolyRef.current) {
+    if (!fullPolyRef.current || !activePolyRef.current) {
       fullPolyRef.current = new google.maps.Polyline({
         map,
-        strokeColor: FULL_ROUTE_COLOR,
+        strokeColor: "#9aa0a6",
         strokeWeight: 6,
         strokeOpacity: 0.9,
         zIndex: 40,
+      });
+      activePolyRef.current = new google.maps.Polyline({
+        map,
+        strokeColor: "#3b82f6",
+        strokeWeight: 6,
+        strokeOpacity: 1.0,
+        zIndex: 50,
       });
     }
 
     if (activePath.length > 0) {
       fullPolyRef.current.setPath(activePath);
+      activePolyRef.current.setPath(activePath);
     } else {
       // Fallback: draw straight lines between stops
       const fallbackPath = stops.map(s => new google.maps.LatLng(s.lat, s.lng));
       fullPolyRef.current.setPath(fallbackPath);
+      activePolyRef.current.setPath(fallbackPath);
     }
 
     return () => { clearNavPolylines(); };
   }, [map, navPhase, geometryLib, activePath]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Slicing: Active Path is blue from bus location onwards
+  useEffect(() => {
+    if (navPhase !== "navigating" || !driverLocation || !activePolyRef.current || !fullPolyRef.current) return;
+    const fullPathArray = fullPolyRef.current.getPath()?.getArray();
+    if (fullPathArray && fullPathArray.length > 0) {
+      let minVertDist = Infinity;
+      let closestVertIdx = 0;
+      fullPathArray.forEach((pt, vIdx) => {
+        const d = getDistanceMeters({ lat: driverLocation.lat, lng: driverLocation.lng }, { lat: pt.lat(), lng: pt.lng() });
+        if (d < minVertDist) {
+          minVertDist = d;
+          closestVertIdx = vIdx;
+        }
+      });
+      const newPath = [
+        new google.maps.LatLng(driverLocation.lat, driverLocation.lng),
+        ...fullPathArray.slice(closestVertIdx)
+      ];
+      activePolyRef.current.setPath(newPath);
+    }
+  }, [driverLocation?.lat, driverLocation?.lng, navPhase, activePath]);
 
   // ══════════════════════════════════════════════════════════════════
   //  OFF-ROUTE AUTO-REROUTE (called on GPS updates in navigating mode)

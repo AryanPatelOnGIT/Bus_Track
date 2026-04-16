@@ -159,7 +159,7 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
     if (!map) return;
     fullPolyRef.current = new google.maps.Polyline({
       map,
-      strokeColor: "#3b82f6",
+      strokeColor: "#9aa0a6",
       strokeWeight: 7,
       strokeOpacity: 0.8,
       zIndex: 40,
@@ -245,8 +245,30 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
             // ── Speed-aware ETA (matches driver's formula) ──
             // Use bus's real GPS speed; fall back to floor
             const busSpeedKmh = bus.speed > 0 ? bus.speed : BUS_SPEED_FLOOR_KMH;
-            // metres/minute
+            // mPerMin
             const mPerMin = (busSpeedKmh * 1000) / 60;
+
+            // ── Update Active Polyline (Blue) to start from bus location ──
+            if (activePolyRef.current && fullPolyRef.current) {
+              const fullPathArray = fullPolyRef.current.getPath()?.getArray();
+              if (fullPathArray && fullPathArray.length > 0) {
+                let minVertDist = Infinity;
+                let closestVertIdx = 0;
+                fullPathArray.forEach((pt, vIdx) => {
+                  const d = getDistanceMeters({ lat: bus.lat, lng: bus.lng }, { lat: pt.lat(), lng: pt.lng() });
+                  if (d < minVertDist) {
+                    minVertDist = d;
+                    closestVertIdx = vIdx;
+                  }
+                });
+                // Build a new array starting with the bus's exact current lat/lng to prevent gaps
+                const newPath = [
+                  new google.maps.LatLng(bus.lat, bus.lng),
+                  ...fullPathArray.slice(closestVertIdx)
+                ];
+                activePolyRef.current.setPath(newPath);
+              }
+            }
 
             const distToNextStop = getDistanceMeters(
               { lat: bus.lat, lng: bus.lng },
