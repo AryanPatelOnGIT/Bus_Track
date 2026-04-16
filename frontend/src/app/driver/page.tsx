@@ -11,11 +11,9 @@ import { useDrivers } from "@/hooks/useDrivers";
 import { useBuses } from "@/hooks/useBuses";
 import { Navigation, User, Radio } from "lucide-react";
 import { rtdb } from "@/lib/firebase";
-import { auth } from "@/lib/firebase";
-import { getIdToken } from "firebase/auth";
-import { ref, remove, onDisconnect } from "firebase/database";
+import { ref, set, remove, onDisconnect, serverTimestamp } from "firebase/database";
 
-// Mock location state — uses tiny increments instead of random jumps
+// Mock location state for fallback when GPS is unavailable
 let mockLat = 23.0347;
 let mockLng = 72.5483;
 let mockHeading = 45;
@@ -36,13 +34,13 @@ export default function DriverPage() {
   }, []);
 
   useEffect(() => {
-     if (driverId) localStorage.setItem("driverId", driverId);
-     setSelectedBusId("");
+    if (driverId) localStorage.setItem("driverId", driverId);
+    setSelectedBusId("");
   }, [driverId]);
 
   const activeDriver = drivers.find(d => d.id === driverId);
   const busId = selectedBusId || activeDriver?.assignedBusId || "";
-  
+
   const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
   const [isTracking, setIsTracking] = useState(false);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number; heading: number } | null>(null);
@@ -50,20 +48,18 @@ export default function DriverPage() {
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const [isSocketConnected, setIsSocketConnected] = useState(false);
-
   const busIdRef = useRef("");
   const routeIdsRef = useRef<string[]>([]);
   const currentStopIndexRef = useRef<number>(0);
-  const isTrackingRef = useRef(false); // used inside socket callbacks
+  const delayMinutesRef = useRef<number>(0);
+  const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
+
   const handleStopIndexChange = useCallback((index: number) => {
     currentStopIndexRef.current = index;
   }, []);
+
   useEffect(() => { busIdRef.current = busId; }, [busId]);
   useEffect(() => { routeIdsRef.current = selectedRouteIds; }, [selectedRouteIds]);
-  
-  const socketRef = useRef<ReturnType<typeof import("socket.io-client").io> | null>(null);
-  const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (routes.length > 0 && selectedRouteIds.length === 0) {
@@ -71,86 +67,52 @@ export default function DriverPage() {
     }
   }, [routes]);
 
+  // Also keep a dummy socketRef for DriverMap compatibility (DriverMap accepts it but we won't use it for tracking)
+  const socketRef = useRef<any>(null);
+
   const activeRoute = routes.find(r => selectedRouteIds.includes(r.id)) || routes.find(r => r.id === selectedRouteIds[0]);
 
-  useEffect(() => {
-    const connectSocket = async () => {
-      const currentUser = auth.currentUser;
-      let token: string | undefined;
-      try {
-        if (currentUser) token = await getIdToken(currentUser);
-      } catch {
-        console.warn("[Socket] Failed to get ID token; connecting as anonymous");
-      }
+  // Write location directly to Firebase RTDB
+  const writeLocationToRTDB = useCallback((lat: number, lng: number, heading: number, speed: number) => {
+    const currentBusId = busIdRef.current;
+    const currentRouteIds = routeIdsRef.current;
+    const currentStopIndex = currentStopIndexRef.current;
+    if (!currentBusId || currentRouteIds.length === 0) return;
 
-      // Wake up Render backend before connecting (free tier cold start can take 30-60s)
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "https://bustrack-backend.onrender.com";
-      fetch(`${backendUrl}/health`, { method: "GET", mode: "cors" }).catch(() => {});
-
-      const { io } = await import("socket.io-client");
-      const socket = io(backendUrl, {
-        // Polling-first: more reliable through Render's HTTP proxy.
-        // Automatically upgrades to WebSocket once the connection is stable.
-        transports: ["polling", "websocket"],
-        auth: token ? { token } : {},
-        reconnection: true,
-        reconnectionAttempts: 20,
-        reconnectionDelay: 3000,
-        reconnectionDelayMax: 10000,
-        timeout: 60000, // Render free tier can take 30-60s to cold-start
-      });
-      socketRef.current = socket;
-
-      socket.on("connect", () => {
-        console.log("[Socket] Connected to backend:", socket.id);
-        setIsSocketConnected(true);
-        // If driver was already tracking (e.g. socket reconnected), re-register
-        if (isTrackingRef.current && busIdRef.current) {
-          socket.emit("driver:start-tracking", {
-            busId: busIdRef.current,
-            driverId,
-            routeIds: routeIdsRef.current,
-          });
-          console.log("[Socket] Re-emitted driver:start-tracking after reconnect");
-        }
-      });
-      socket.on("disconnect", () => {
-        setIsSocketConnected(false);
-      });
-      socket.on("reconnect_attempt", (n) => {
-        console.log(`[Socket] Reconnect attempt #${n}…`);
-        fetch(`${backendUrl}/health`, { method: "GET", mode: "cors" }).catch(() => {});
-      });
-      socket.on("connect_error", (err) => {
-        console.error("[Socket] Connection error:", err.message);
-      });
+    const payload = {
+      busId: currentBusId,
+      driverId: driverId || user?.uid || "driver",
+      routeId: currentRouteIds[0],
+      lat,
+      lng,
+      heading,
+      speed,
+      status: "active",
+      timestamp: Date.now(),
+      currentStopIndex,
+      delayMinutes: delayMinutesRef.current,
     };
 
-    connectSocket();
-
-    return () => {
-      socketRef.current?.disconnect();
-      if (intervalIdRef.current) clearInterval(intervalIdRef.current);
-    };
-  }, []);
+    // Write one entry per route so passengers on any of the routes can find the bus
+    currentRouteIds.forEach(routeId => {
+      const busRef = ref(rtdb, `activeBuses/${currentBusId}_${routeId}`);
+      set(busRef, { ...payload, routeId }).catch(err =>
+        console.error("[RTDB] Write failed:", err)
+      );
+    });
+  }, [driverId, user?.uid]);
 
   const handleStartTracking = useCallback(() => {
-    if (!busId) return;
+    if (!busId || selectedRouteIds.length === 0) return;
     setIsTracking(true);
-    isTrackingRef.current = true;
 
-    socketRef.current?.emit("driver:start-tracking", {
-      busId,
-      driverId: driverId,
-      routeIds: selectedRouteIds
+    // Set onDisconnect cleanup so the bus disappears if the driver closes the browser
+    selectedRouteIds.forEach(routeId => {
+      const busRef = ref(rtdb, `activeBuses/${busId}_${routeId}`);
+      onDisconnect(busRef).remove().catch(() => {});
     });
 
-    const messagesRef = ref(rtdb, `messages/${busId}`);
-    onDisconnect(messagesRef).remove().catch(() => {});
-
     const updateLocation = () => {
-      const currentIndex = currentStopIndexRef.current;
-
       if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
@@ -161,27 +123,16 @@ export default function DriverPage() {
             };
             const speed = (pos.coords.speed || 0) * 3.6;
             setDriverLocation(newLoc);
-            socketRef.current?.emit("driver:location-update", {
-              busId, driverId,
-              lat: newLoc.lat, lng: newLoc.lng, heading: newLoc.heading,
-              speed, timestamp: pos.timestamp, status: "active",
-              currentStopIndex: currentIndex,
-              routeIds: routeIdsRef.current, // always send so backend can self-heal
-            });
+            writeLocationToRTDB(newLoc.lat, newLoc.lng, newLoc.heading, speed);
           },
           () => {
+            // GPS unavailable — use mock movement
             mockLat += (Math.random() - 0.4) * 0.0003;
             mockLng += (Math.random() - 0.3) * 0.0004;
             mockHeading = (mockHeading + (Math.random() - 0.5) * 15 + 360) % 360;
             const mockLoc = { lat: mockLat, lng: mockLng, heading: Math.round(mockHeading) };
             setDriverLocation(mockLoc);
-            socketRef.current?.emit("driver:location-update", {
-              busId, driverId,
-              lat: mockLoc.lat, lng: mockLoc.lng, heading: mockLoc.heading,
-              speed: 15, timestamp: Date.now(), status: "active",
-              currentStopIndex: currentIndex,
-              routeIds: routeIdsRef.current, // always send so backend can self-heal
-            });
+            writeLocationToRTDB(mockLoc.lat, mockLoc.lng, mockLoc.heading, 15);
           },
           { enableHighAccuracy: true, timeout: 5000 }
         );
@@ -190,28 +141,35 @@ export default function DriverPage() {
 
     updateLocation();
     intervalIdRef.current = setInterval(updateLocation, 3000);
-  }, [busId, selectedRouteIds, driverId]);
+  }, [busId, selectedRouteIds, writeLocationToRTDB]);
 
   const handleStopTracking = useCallback(() => {
     const currentBusId = busIdRef.current;
+    const currentRouteIds = routeIdsRef.current;
     setIsTracking(false);
-    isTrackingRef.current = false;
-    const messagesRef = ref(rtdb, `messages/${currentBusId}`);
-    remove(messagesRef).catch(console.error);
-    onDisconnect(messagesRef).cancel();
-    socketRef.current?.emit("driver:stop-tracking", { busId: currentBusId });
+    setDriverLocation(null);
+
     if (intervalIdRef.current) {
       clearInterval(intervalIdRef.current);
       intervalIdRef.current = null;
     }
-    setDriverLocation(null);
+
+    // Remove bus from RTDB so passengers see it go offline
+    currentRouteIds.forEach(routeId => {
+      const busRef = ref(rtdb, `activeBuses/${currentBusId}_${routeId}`);
+      remove(busRef).catch(console.error);
+      onDisconnect(busRef).cancel();
+    });
+
+    // Clean up messages
+    const messagesRef = ref(rtdb, `messages/${currentBusId}`);
+    remove(messagesRef).catch(console.error);
   }, []);
 
   const handleRouteUpdate = useCallback((routeIds: string[]) => {
-    if (socketRef.current && busId) {
-      socketRef.current.emit("driver:route-update", { busId, routeIds });
-    }
-  }, [busId]);
+    // Called when driver changes route mid-trip — just update local refs; next tick will write new RTDB entries
+    routeIdsRef.current = routeIds;
+  }, []);
 
   const handleOpenMessaging = () => {
     setIsMessagingOpen(true);
@@ -220,14 +178,13 @@ export default function DriverPage() {
 
   return (
     <div className="flex flex-col bg-brand-dark text-white overflow-hidden" style={{ height: "100dvh" }}>
-      {/* View Container */}
       <div className="relative flex-1 flex flex-col overflow-hidden min-h-0">
-        
+
         <div className={`absolute inset-0 z-0 flex flex-col ${activeTab === "map" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
           <div className="flex-1 relative z-0 min-h-0">
             {activeRoute && (
-              <DriverMap 
-                route={activeRoute} 
+              <DriverMap
+                route={activeRoute}
                 driverLocation={driverLocation}
                 socketRef={socketRef as any}
                 busId={busId}
@@ -238,7 +195,7 @@ export default function DriverPage() {
               />
             )}
           </div>
-          
+
           {!isTracking && (
             <div className="shrink-0 z-10 w-full">
               <TransmitterControls
@@ -254,20 +211,20 @@ export default function DriverPage() {
                 onStartTracking={handleStartTracking}
                 onStopTracking={handleStopTracking}
                 onRouteUpdate={handleRouteUpdate}
-                isSocketConnected={isSocketConnected}
+                isSocketConnected={true}
               />
             </div>
           )}
         </div>
-        
+
         <div className={`absolute inset-0 z-10 flex flex-col bg-brand-dark transition-opacity duration-300 ${activeTab === "profile" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
           <DriverProfileTab driverId={driverId || "UNASSIGNED"} busId={busId || "UNASSIGNED"} onStopTracking={handleStopTracking} isTracking={isTracking} />
         </div>
 
-        {/* Messaging FAB — top-right, always visible when on map tab */}
+        {/* Messaging FAB — top right */}
         {activeTab === "map" && !isMessagingOpen && (
           <div className="absolute top-4 right-4 z-50">
-            <button 
+            <button
               onClick={handleOpenMessaging}
               className="w-12 h-12 rounded-full bg-brand-surface/90 backdrop-blur-xl border border-white/10 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all relative"
               aria-label="Open live comms"
@@ -310,7 +267,7 @@ export default function DriverPage() {
             <Navigation className={`w-5 h-5 mb-1 ${activeTab === "map" ? "text-white" : "opacity-40"}`} />
             <span className="text-[9px] font-black tracking-[0.15em] uppercase">Drive View</span>
           </button>
-          
+
           <button
             onClick={() => setActiveTab("profile")}
             className={`flex flex-col items-center justify-center py-2 flex-1 rounded-2xl transition-all duration-300 ${
