@@ -9,7 +9,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "lint": "eslint src --ext .ts",
-    "seed": "tsx src/seed.ts"
+    "seed": "tsx src/seed.ts",
+    "patch-stops": "tsx src/patch-stops.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -27,6 +29,7 @@
     "@types/helmet": "^0.0.48",
     "@types/node": "^20.14.0",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
   }
 }

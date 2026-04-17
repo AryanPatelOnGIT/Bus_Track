@@ -16,7 +16,10 @@ export interface BusLocation {
   speed: number;       // km/h
   timestamp: number;   // Unix ms
   status: "active" | "idle" | "maintenance";
-  routeId?: string;    // The ID from PREDEFINED_ROUTES
+  routeId?: string;    // The ID from PREDEFINED_ROUTES (legacy single route)
+  routeIds?: string[]; // Array of associated routeIds for multi-route assignment
+  currentStopIndex?: number; // Driver's current stop in the route progression
+  delayMinutes?: number;     // Reported delay in minutes (positive = late)
 }
 
 // ── Passenger Requests ────────────────────────────────────────────────────────
@@ -79,9 +82,9 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  "driver:start-tracking": (data: { busId: string; driverId: string; routeId?: string }) => void;
-  "driver:location-update": (data: Omit<BusLocation, "status">) => void;
-  "driver:route-update": (data: { busId: string; routeId: string }) => void;
+  "driver:start-tracking": (data: { busId: string; driverId: string; routeId?: string; routeIds?: string[] }) => void;
+  "driver:location-update": (data: Omit<BusLocation, "status"> & { routeIds?: string[]; currentStopIndex?: number }) => void;
+  "driver:route-update": (data: { busId: string; routeId?: string; routeIds?: string[] }) => void;
   "driver:stop-tracking": (data: { busId: string }) => void;
   "driver:request-done": (data: { requestId: string }) => void;
   "passenger:request": (data: Omit<PassengerRequest, "requestId" | "status" | "createdAt">) => void;

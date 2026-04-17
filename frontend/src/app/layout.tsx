@@ -2,10 +2,13 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "BusTrack – Ahmedabad BRTS Live Tracking",
+  title: "BusTrack – Live Tracking",
   description:
-    "Real-time bus tracking, ride-hailing, and fleet management for Ahmedabad BRTS. Live GPS for passengers, drivers, and administrators.",
-  keywords: ["bus tracking", "BRTS", "Ahmedabad", "public transit", "live GPS"],
+    "Real-time tracking, ride-hailing, and fleet management. Live GPS for passengers, drivers, and administrators.",
+  keywords: ["tracking", "live GPS", "fleet management"],
+  icons: {
+    icon: "/BusLogo.png",
+  },
 };
 
 import Providers from "@/components/Providers";

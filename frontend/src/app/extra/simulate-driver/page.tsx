@@ -35,13 +35,12 @@ export default function SimulateDriverPage() {
         <h1 className="font-bold text-lg text-white">Simulation: Driver Node</h1>
         <span className="text-xs bg-violet-500/20 text-violet-300 font-bold px-2 py-1 rounded">Testing Mode</span>
       </div>
-      
+
       <div className="relative flex-1">
         <DriverMap
           socketRef={socketRef as any}
           busId={busId}
           route={BRTS_ROUTES[0]}
-          targetStop={BRTS_ROUTES[0].stops[1]}
           driverLocation={sim.currentPosition ? { ...sim.currentPosition, heading: sim.heading } : null}
         />
       </div>

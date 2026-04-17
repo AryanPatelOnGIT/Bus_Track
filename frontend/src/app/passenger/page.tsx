@@ -7,7 +7,7 @@ import MessagingPanel from "@/components/shared/MessagingPanel";
 import FeedbackModal from "@/components/shared/FeedbackModal";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoutes } from "@/hooks/useRoutes";
-import { Map as MapIcon, User, Loader2, MessageSquare } from "lucide-react";
+import { Map as MapIcon, User, Loader2, Radio } from "lucide-react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, off } from "firebase/database";
 import { buzzController } from "@/lib/audioUtils";
@@ -31,8 +31,9 @@ export default function PassengerPage() {
   const { routes } = useRoutes();
   const [selectedRouteId, setSelectedRouteId] = useState("");
   const [selectedStopId, setSelectedStopId] = useState("");
-  const [activeBuses, setActiveBuses] = useState<Map<string, string>>(new Map());
+  const [activeBuses, setActiveBuses] = useState<{busId: string, routeId: string}[]>([]);
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackBusId, setFeedbackBusId] = useState("");
   const [feedbackDriverId, setFeedbackDriverId] = useState("");
@@ -41,20 +42,18 @@ export default function PassengerPage() {
   const latestBusDriversRef = useRef<Map<string, string>>(new Map());
 
   // Listen to Firebase Realtime Database for active buses
-  // This works from any phone anywhere — no backend server needed!
   useEffect(() => {
     const busesRef = ref(rtdb, "activeBuses");
 
     const handleSnapshot = onValue(busesRef, (snapshot) => {
       const data = snapshot.val();
-      const newMap = new Map<string, string>();
+      const newBuses: {busId: string, routeId: string}[] = [];
       const driverMap = new Map<string, string>();
       if (data) {
         Object.values(data as Record<string, ActiveBusData & { driverId?: string }>).forEach((bus) => {
-          // 5 minute buffer to avoid mobile clock drift hiding buses. OnDisconnect handles real disconnects.
           const isFresh = Date.now() - bus.timestamp < 300000; 
           if (bus.routeId && bus.busId && bus.status === "active" && isFresh) {
-            newMap.set(bus.busId, bus.routeId);
+            newBuses.push({ busId: bus.busId, routeId: bus.routeId });
             if (bus.driverId) {
               driverMap.set(bus.busId, bus.driverId);
             }
@@ -62,13 +61,13 @@ export default function PassengerPage() {
         });
       }
       latestBusDriversRef.current = driverMap;
-      setActiveBuses(newMap);
+      setActiveBuses(newBuses);
     });
 
     return () => off(busesRef, "value", handleSnapshot);
   }, []);
 
-  const activeRouteIds = Array.from(new Set(activeBuses.values()));
+  const activeRouteIds = Array.from(new Set(activeBuses.map(b => b.routeId)));
   const activeRouteIdsStr = activeRouteIds.sort().join(',');
 
   useEffect(() => {
@@ -110,7 +109,7 @@ export default function PassengerPage() {
         shortName: "LIVE"
       }));
 
-  const activeBusOnRoute = Array.from(activeBuses.keys()).find(id => activeBuses.get(id) === selectedRouteId);
+  const activeBusOnRoute = activeBuses.find(b => b.routeId === selectedRouteId)?.busId;
 
   useEffect(() => {
     let timerId: NodeJS.Timeout;
@@ -135,14 +134,19 @@ export default function PassengerPage() {
     };
   }, [activeBusOnRoute]);
 
+  const handleOpenMessaging = () => {
+    setIsMessagingOpen(true);
+    setUnreadCount(0);
+  };
+
   return (
-    <div className="flex flex-col h-screen bg-brand-dark text-white overflow-hidden">
-      <div className="relative flex-1 flex flex-col overflow-hidden">
+    <div className="flex flex-col bg-brand-dark text-white overflow-hidden" style={{ height: "100dvh" }}>
+      <div className="relative flex-1 flex flex-col overflow-hidden min-h-0">
         <div className={`absolute inset-0 z-0 ${activeTab === "map" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
           {activeRoute && targetStop ? (
             <>
               {/* Route Selector */}
-              <div className="absolute top-0 w-full z-40 bg-gradient-to-b from-brand-dark/95 to-transparent pt-safe px-4 pb-12 flex flex-col gap-3">
+              <div className="absolute top-0 w-full z-40 bg-gradient-to-b from-brand-dark/95 to-transparent pt-safe px-4 pb-10 flex flex-col gap-2.5">
                 <div className="relative w-full max-w-lg mx-auto">
                   <select
                     value={selectedRouteId}
@@ -150,13 +154,14 @@ export default function PassengerPage() {
                       setSelectedRouteId(e.target.value);
                       buzzController.unlock();
                     }}
-                    className="w-full h-14 backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl px-6 text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight"
+                    className="w-full h-13 backdrop-blur-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-5 text-white text-[13px] focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight transition-all cursor-pointer"
+                    style={{ height: "52px" }}
                   >
                     {availableRoutes.map((r) => (
-                      <option key={r.id} value={r.id} className="bg-brand-dark">{r.name}</option>
+                      <option key={r.id} value={r.id} className="bg-[#1a1c29] text-white">Route: {r.name}</option>
                     ))}
                   </select>
-                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-30">
+                  <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                       <path d="M6 9l6 6 6-6" />
                     </svg>
@@ -171,13 +176,13 @@ export default function PassengerPage() {
                         setSelectedStopId(e.target.value);
                         buzzController.unlock();
                       }}
-                      className="w-full h-12 backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl px-6 text-white text-xs focus:outline-none focus:ring-2 focus:ring-white/20 shadow-2xl appearance-none font-bold tracking-tight"
+                      className="w-full h-11 bg-black/90 hover:bg-black border border-white/15 rounded-2xl px-5 text-white text-[12px] focus:outline-none focus:ring-2 focus:ring-white/40 shadow-2xl appearance-none font-bold tracking-tight transition-all cursor-pointer"
                     >
                       {activeRoute.stops.map((s) => (
-                        <option key={s.id} value={s.id} className="bg-brand-dark">Alight at: {s.name}</option>
+                        <option key={s.id} value={s.id} className="bg-black text-white">Alight at: {s.name}</option>
                       ))}
                     </select>
-                    <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-30">
+                    <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-white/30">
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                         <path d="M6 9l6 6 6-6" />
                       </svg>
@@ -186,28 +191,35 @@ export default function PassengerPage() {
                 )}
               </div>
 
-              {/* Messaging Button */}
+              {/* Messaging FAB — TOP RIGHT */}
               {activeRouteIds.includes(activeRoute.id) && !isMessagingOpen && (
-                <div className="absolute bottom-48 right-4 z-40">
+                <div className="absolute top-4 right-4 z-50">
                   <button 
-                    onClick={() => setIsMessagingOpen(true)}
-                    className="w-14 h-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all"
+                    onClick={handleOpenMessaging}
+                    className="w-12 h-12 rounded-full bg-brand-surface/90 backdrop-blur-xl border border-white/10 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all relative"
+                    aria-label="Open live comms"
                   >
-                    <MessageSquare className="w-6 h-6" />
+                    <Radio className="w-5 h-5 text-emerald-400" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center text-[10px] font-black text-white px-1 shadow-lg border border-brand-dark">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
+                    )}
                   </button>
                 </div>
               )}
 
-              {/* Messaging Overlay */}
+              {/* Messaging Overlay — bottom raised above RouteTimelineSheet on mobile */}
               {isMessagingOpen && (
-                <div className="absolute inset-x-0 bottom-0 top-32 z-50 animate-slide-up">
+                <div className="absolute inset-x-0 top-24 bottom-[128px] sm:bottom-0 z-50 animate-slide-up flex flex-col">
                   <MessagingPanel
-                    busId={Array.from(activeBuses.keys()).find(id => activeBuses.get(id) === activeRoute.id) || ""}
+                    busId={activeBuses.find(b => b.routeId === activeRoute.id)?.busId || ""}
                     currentUserRole="passenger"
                     currentUserId={user?.uid || "anonymous"}
                     currentUserName={user?.displayName || "Rider"}
                     isOverlay={true}
                     onClose={() => setIsMessagingOpen(false)}
+                    onUnreadCountChange={setUnreadCount}
                   />
                 </div>
               )}
@@ -220,7 +232,7 @@ export default function PassengerPage() {
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center bg-brand-dark px-10 text-center">
               <Loader2 className="w-10 h-10 text-white/20 animate-spin mb-6" />
-              <p className="text-white/40 text-sm font-bold uppercase tracking-[0.2em]">Waiting for Operator (v5)...</p>
+              <p className="text-white/40 text-sm font-bold uppercase tracking-[0.2em]">Waiting for a driver to go live…</p>
               <p className="text-white/20 text-xs mt-2">Updates automatically when a driver goes online</p>
             </div>
           )}
@@ -243,25 +255,25 @@ export default function PassengerPage() {
       )}
 
       {/* Bottom Navigation */}
-      <nav className="shrink-0 bg-brand-surface/80 border-t border-white/5 backdrop-blur-2xl pb-safe">
-        <div className="flex items-center justify-around px-4 py-2 max-w-md mx-auto">
+      <nav className="relative z-50 shrink-0 bg-brand-surface/80 border-t border-white/5 backdrop-blur-2xl pb-safe" style={{ height: "64px" }}>
+        <div className="flex items-center justify-around px-4 h-full max-w-md mx-auto">
           <button
             onClick={() => setActiveTab("map")}
-            className={`flex flex-col items-center justify-center py-3 flex-1 rounded-2xl transition-all duration-300 ${
+            className={`flex flex-col items-center justify-center py-2 flex-1 rounded-2xl transition-all duration-300 ${
               activeTab === "map" ? "text-white bg-white/5 transform scale-105" : "text-white/30 hover:text-white/60"
             }`}
           >
-            <MapIcon className={`w-5 h-5 mb-1.5 ${activeTab === "map" ? "text-white" : "opacity-40"}`} />
+            <MapIcon className={`w-5 h-5 mb-1 ${activeTab === "map" ? "text-white" : "opacity-40"}`} />
             <span className="text-[9px] font-black tracking-[0.15em] uppercase">Live Map</span>
           </button>
 
           <button
             onClick={() => setActiveTab("account")}
-            className={`flex flex-col items-center justify-center py-3 flex-1 rounded-2xl transition-all duration-300 ${
+            className={`flex flex-col items-center justify-center py-2 flex-1 rounded-2xl transition-all duration-300 ${
               activeTab === "account" ? "text-white bg-white/5 transform scale-105" : "text-white/30 hover:text-white/60"
             }`}
           >
-            <User className={`w-5 h-5 mb-1.5 ${activeTab === "account" ? "text-white" : "opacity-40"}`} />
+            <User className={`w-5 h-5 mb-1 ${activeTab === "account" ? "text-white" : "opacity-40"}`} />
             <span className="text-[9px] font-black tracking-[0.15em] uppercase">Account</span>
           </button>
         </div>

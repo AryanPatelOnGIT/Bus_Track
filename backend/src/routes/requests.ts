@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { pendingRequests } from "../sockets/trackingGateway";
+import { requireAdmin } from "../middleware/requireAdmin";
 import type { PassengerRequest } from "../types";
 
 const router = Router();
@@ -57,13 +58,15 @@ router.post("/", (req, res) => {
 });
 
 // List all currently pending requests for admin view tracking
+// ARCH-09 fix: no caching — this is live state
 router.get("/", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   const reqArray = Array.from(pendingRequests.values());
   res.json({ requests: reqArray });
 });
 
-// Admin patch completion override
-router.patch("/:id", (req, res) => {
+// Admin patch completion override — SEC-10 fix: requires Firebase admin token
+router.patch("/:id", requireAdmin, (req, res) => {
   const id = req.params.id;
   if (!isNonEmptyString(id, 128)) {
     res.status(400).json({ error: "Invalid request id" });
@@ -88,8 +91,8 @@ router.patch("/:id", (req, res) => {
   res.json(pReq);
 });
 
-// Cancel a request by ID
-router.delete("/:id", (req, res) => {
+// Cancel a request by ID — SEC-10 fix: requires Firebase admin token
+router.delete("/:id", requireAdmin, (req, res) => {
   const id = req.params.id;
   if (!isNonEmptyString(id, 128)) {
     res.status(400).json({ error: "Invalid request id" });

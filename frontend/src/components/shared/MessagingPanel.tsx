@@ -21,6 +21,7 @@ interface Props {
   currentUserName: string;
   onClose?: () => void;
   isOverlay?: boolean;
+  onUnreadCountChange?: (count: number) => void;
 }
 
 export default function MessagingPanel({ 
@@ -29,11 +30,13 @@ export default function MessagingPanel({
   currentUserId, 
   currentUserName, 
   onClose,
-  isOverlay = false
+  isOverlay = false,
+  onUnreadCountChange,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastSeenCountRef = useRef(0);
 
   useEffect(() => {
     if (!busId) return;
@@ -47,6 +50,16 @@ export default function MessagingPanel({
           ...val
         })).sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
         setMessages(msgs);
+
+        // Count messages from others to surface unread badge
+        if (onUnreadCountChange) {
+          const othersCount = msgs.filter((m: any) => m.senderId !== currentUserId).length;
+          if (othersCount > lastSeenCountRef.current) {
+            onUnreadCountChange(othersCount - lastSeenCountRef.current);
+          }
+          lastSeenCountRef.current = othersCount;
+        }
+
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
         }, 100);
@@ -58,16 +71,44 @@ export default function MessagingPanel({
     return () => unsubscribe();
   }, [busId]);
 
+  // --- Rate Limiting Logic ---
+  const [messagesSentCounts, setMessagesSentCounts] = useState<{timestamp: number}[]>([]);
+
+  // --- Profanity Filter ---
+  // Matches generic English, common Hindi/Hinglish profanities
+  const PROFANITY_REGEX = /\b(fuck|shit|bitch|ass|asshole|cunt|dick|pussy|bastard|mc|bc|madarchod|bhenchod|chutiya|gandu|bhosadike|bhosdi|harami|kutta|bitch|slut|whore|randi|muth|bhosada)\b/gi;
+
+  const censorText = (text: string) => {
+    return text.replace(PROFANITY_REGEX, "***");
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !busId) return;
 
+    const now = Date.now();
+    const oneHourAgo = now - 3600000;
+    const recentMessages = messagesSentCounts.filter(m => m.timestamp > oneHourAgo);
+    
+    if (recentMessages.length >= 60) {
+      alert("Rate limit exceeded: Maximum 60 messages per hour. Please try again later.");
+      return;
+    }
+    
+    // Add 3-second quick spam cooldown
+    if (recentMessages.length > 0 && (now - recentMessages[recentMessages.length - 1].timestamp < 3000)) {
+      setNewMessage("");
+      return;
+    }
+
+    const censoredContent = censorText(newMessage.trim());
+    setMessagesSentCounts([...recentMessages, { timestamp: now }]);
     const roleForMsg = currentUserRole === "admin" ? "driver" : currentUserRole;
 
     try {
       const messagesRef = ref(rtdb, `messages/${busId}`);
       await push(messagesRef, {
-        text: newMessage.trim(),
+        text: censoredContent,
         from: roleForMsg,
         senderName: currentUserName || (roleForMsg === "driver" ? "Operator" : "Rider"),
         senderId: currentUserId || "anonymous",
@@ -118,11 +159,16 @@ export default function MessagingPanel({
                 key={msg.id} 
                 className={`flex flex-col max-w-[85%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}
               >
-                {!isMe && (
-                  <span className="text-[9px] text-white/30 font-bold uppercase tracking-widest mb-1 px-1">
-                    {msg.senderName}
+                <div className={`flex items-baseline gap-2 mb-1 px-1 ${isMe ? 'flex-row-reverse' : ''}`}>
+                  <span className={`text-[9px] font-bold uppercase tracking-widest ${isMe ? 'text-emerald-400/80' : 'text-white/40'}`}>
+                    {isMe ? 'You' : msg.senderName}
                   </span>
-                )}
+                  {msg.timestamp && (
+                    <span className="text-[8px] font-mono tracking-widest text-white/20">
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
                 <div 
                   className={`px-4 py-2.5 rounded-2xl ${
                     isMe 

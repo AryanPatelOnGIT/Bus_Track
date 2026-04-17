@@ -37,5 +37,9 @@ USER nodejs
 
 EXPOSE 8080
 
+# DEV-01 fix: Healthcheck to ensure container is responsive
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- http://localhost:8080/health || exit 1
+
 # Run the app
 CMD ["node", "dist/server.js"]
