@@ -216,17 +216,21 @@ export default function RouteManagementPanel() {
         ...(bakedPolyline ? { polyline: bakedPolyline } : {}),
       };
       await setDoc(doc(db, "routes", newRouteId), routeData);
+
+      // ✅ Always reset the form and close the creator after a successful write,
+      // regardless of whether the polyline bake succeeded. Without this, the
+      // creator stays open when the bake fails, making it look like the route
+      // was never deployed even though it was saved to Firestore correctly.
+      setIsCreating(false);
+      setNewRouteId("");
+      setNewRouteName("");
+      setNewStops([]);
+
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 5000);
-      if (bakedPolyline) {
-        setIsCreating(false);
-        setNewRouteId("");
-        setNewRouteName("");
-        setNewStops([]);
-      }
     } catch (err) {
       console.error("Error saving route:", err);
-      alert("Failed to save route to Firestore.");
+      alert("Failed to save route to Firestore. Check your admin permissions and try again.");
     } finally {
       setIsSaving(false);
     }
@@ -264,6 +268,13 @@ export default function RouteManagementPanel() {
             <Plus className="w-3.5 h-3.5" /> ADD ROUTE
           </button>
         </div>
+
+        {/* ✅ Success toast — shown after returning from the creator */}
+        {showSuccess && (
+          <div className="flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest animate-slide-up">
+            <CheckCircle className="w-4 h-4 shrink-0" /> Route deployed successfully!
+          </div>
+        )}
 
         {/* Route Cards */}
         <div className="flex flex-col gap-3">
@@ -340,11 +351,6 @@ export default function RouteManagementPanel() {
         </div>
 
         {/* Toasts */}
-        {showSuccess && (
-          <div className="flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-widest animate-slide-up">
-            <CheckCircle className="w-4 h-4 shrink-0" /> Route deployed successfully!
-          </div>
-        )}
         {polylineBakeError && (
           <div className="flex items-center gap-2 bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-xl px-4 py-2 text-xs font-bold animate-slide-up">
             <span className="flex-1">{polylineBakeError}</span>
