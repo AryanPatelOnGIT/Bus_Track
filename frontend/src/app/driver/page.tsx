@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import TransmitterControls from "@/components/driver/TransmitterControls";
 import DriverMap from "@/components/maps/DriverMap";
 import DriverProfileTab from "@/components/driver/DriverProfileTab";
@@ -9,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRoutes } from "@/hooks/useRoutes";
 import { useDrivers } from "@/hooks/useDrivers";
 import { useBuses } from "@/hooks/useBuses";
-import { Navigation, User, Radio } from "lucide-react";
+import { Navigation, User, Radio, ArrowLeft } from "lucide-react";
 import { rtdb } from "@/lib/firebase";
 import { ref, set, remove, onDisconnect, serverTimestamp } from "firebase/database";
 
@@ -21,6 +22,7 @@ let mockHeading = 45;
 type Tab = "map" | "profile";
 
 export default function DriverPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const { routes } = useRoutes();
   const { drivers } = useDrivers();
@@ -220,6 +222,19 @@ export default function DriverPage() {
         <div className={`absolute inset-0 z-10 flex flex-col bg-brand-dark transition-opacity duration-300 ${activeTab === "profile" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
           <DriverProfileTab driverId={driverId || "UNASSIGNED"} busId={busId || "UNASSIGNED"} onStopTracking={handleStopTracking} isTracking={isTracking} />
         </div>
+
+        {/* Back Button FAB — top left, only shown when not tracking */}
+        {activeTab === "map" && !isTracking && (
+          <div className="absolute top-4 left-4 z-50">
+            <button
+              onClick={() => router.back()}
+              className="w-12 h-12 rounded-full bg-brand-surface/90 backdrop-blur-xl border border-white/10 text-white flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="w-5 h-5 text-white/70" />
+            </button>
+          </div>
+        )}
 
         {/* Messaging FAB — top right */}
         {activeTab === "map" && !isMessagingOpen && (

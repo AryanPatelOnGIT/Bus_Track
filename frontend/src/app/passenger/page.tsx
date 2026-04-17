@@ -209,9 +209,9 @@ export default function PassengerPage() {
                 </div>
               )}
 
-              {/* Messaging Overlay */}
+              {/* Messaging Overlay — bottom raised above RouteTimelineSheet on mobile */}
               {isMessagingOpen && (
-                <div className="absolute inset-x-0 bottom-0 top-24 z-50 animate-slide-up">
+                <div className="absolute inset-x-0 top-24 bottom-[128px] sm:bottom-0 z-50 animate-slide-up flex flex-col">
                   <MessagingPanel
                     busId={activeBuses.find(b => b.routeId === activeRoute.id)?.busId || ""}
                     currentUserRole="passenger"
