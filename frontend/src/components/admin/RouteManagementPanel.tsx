@@ -183,15 +183,23 @@ export default function RouteManagementPanel() {
       if (!currentUser) throw new Error("Must be logged in to create routes");
       const token = await getIdToken(currentUser);
 
+      // ⏱️ 8-second hard timeout — if the backend is unreachable we fail fast
+      // and fall through to saving the route to Firestore without a polyline.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
       const polyRes = await fetch(`${backendUrl}/api/routes/compute-polyline`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({ waypoints: waypointsForBake }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+
       if (!polyRes.ok) {
         const errData = (await polyRes.json().catch(() => ({}))) as Record<string, string>;
         throw new Error(errData.error || `HTTP ${polyRes.status}`);
@@ -199,10 +207,11 @@ export default function RouteManagementPanel() {
       const polyData = (await polyRes.json()) as { polyline: string };
       bakedPolyline = polyData.polyline;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
+      const isTimeout = err instanceof Error && err.name === "AbortError";
+      const msg = isTimeout ? "Backend unreachable (timeout)" : err instanceof Error ? err.message : "Unknown error";
       console.warn("⚠️ Polyline bake failed:", msg);
       setPolylineBakeError(
-        `⚠️ Polyline bake failed (${msg}). Route saved with straight-line fallback.`
+        `⚠️ Polyline bake skipped (${msg}). Route saved with straight-line fallback.`
       );
     }
 
