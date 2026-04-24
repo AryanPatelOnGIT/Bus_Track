@@ -21,6 +21,8 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { Server as SocketServer } from "socket.io";
+// @ts-ignore
+import customParser from "socket.io-msgpack-parser";
 import { trackingGateway, restoreState } from "./sockets/trackingGateway";
 import { preloadRoutePolylines } from "./lib/etaService";
 import { auth, db } from "./lib/firebaseAdmin";
@@ -98,6 +100,22 @@ const io = new SocketServer(httpServer, {
   transports: ["polling", "websocket"],
   pingTimeout: 60000,
   pingInterval: 25000,
+  parser: customParser,
+  httpCompression: {
+    threshold: 1024,
+  },
+  perMessageDeflate: {
+    threshold: 1024, 
+    // GZIP fast mode (level 3) is prioritized over Brotli for real-time WebSocket streams
+    zlibDeflateOptions: {
+      chunkSize: 1024,
+      memLevel: 7,
+      level: 3,
+    },
+    zlibInflateOptions: {
+      chunkSize: 10 * 1024
+    }
+  }
 });
 
 // ── SEC-04 fix: Authenticate every socket with a Firebase ID token ──

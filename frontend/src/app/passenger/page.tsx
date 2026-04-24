@@ -7,22 +7,25 @@ import MessagingPanel from "@/components/shared/MessagingPanel";
 import FeedbackModal from "@/components/shared/FeedbackModal";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoutes } from "@/hooks/useRoutes";
-import { Map as MapIcon, User, Loader2, Radio } from "lucide-react";
+import { Map as MapIcon, User, Radio } from "lucide-react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, off } from "firebase/database";
 import { buzzController } from "@/lib/audioUtils";
 
 type Tab = "map" | "account";
 
-interface ActiveBusData {
+interface IncomingBusData {
   busId: string;
   routeId: string;
   lat: number;
   lng: number;
   heading: number;
   speed: number;
-  status: string;
   timestamp: number;
+  status: "active" | "maintenance" | "idle";
+  currentStopIndex?: number;
+  delayMinutes?: number;
+  driverId?: string;
 }
 
 export default function PassengerPage() {
@@ -31,7 +34,7 @@ export default function PassengerPage() {
   const { routes } = useRoutes();
   const [selectedRouteId, setSelectedRouteId] = useState("");
   const [selectedStopId, setSelectedStopId] = useState("");
-  const [activeBuses, setActiveBuses] = useState<{busId: string, routeId: string}[]>([]);
+  const [activeBusesMap, setActiveBusesMap] = useState<Record<string, IncomingBusData>>({});
   const [isMessagingOpen, setIsMessagingOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -41,33 +44,34 @@ export default function PassengerPage() {
   const trackingDriverIdRef = useRef<string | null>(null);
   const latestBusDriversRef = useRef<Map<string, string>>(new Map());
 
-  // Listen to Firebase Realtime Database for active buses
+  // Listen to Firebase Realtime Database for active buses ONE TIME (Consolidated data ingestion)
   useEffect(() => {
     const busesRef = ref(rtdb, "activeBuses");
-
     const handleSnapshot = onValue(busesRef, (snapshot) => {
-      const data = snapshot.val();
-      const newBuses: {busId: string, routeId: string}[] = [];
-      const driverMap = new Map<string, string>();
+      const data = snapshot.val() as Record<string, IncomingBusData>;
       if (data) {
-        Object.values(data as Record<string, ActiveBusData & { driverId?: string }>).forEach((bus) => {
+        const filtered: Record<string, IncomingBusData> = {};
+        const driverMap = new Map<string, string>();
+        Object.entries(data).forEach(([key, bus]) => {
           const isFresh = Date.now() - bus.timestamp < 300000; 
           if (bus.routeId && bus.busId && bus.status === "active" && isFresh) {
-            newBuses.push({ busId: bus.busId, routeId: bus.routeId });
+            filtered[key] = bus;
             if (bus.driverId) {
               driverMap.set(bus.busId, bus.driverId);
             }
           }
         });
+        latestBusDriversRef.current = driverMap;
+        setActiveBusesMap(filtered);
+      } else {
+        setActiveBusesMap({});
       }
-      latestBusDriversRef.current = driverMap;
-      setActiveBuses(newBuses);
     });
 
     return () => off(busesRef, "value", handleSnapshot);
   }, []);
 
-  const activeRouteIds = Array.from(new Set(activeBuses.map(b => b.routeId)));
+  const activeRouteIds = Array.from(new Set(Object.values(activeBusesMap).map(b => b.routeId)));
   const activeRouteIdsStr = activeRouteIds.sort().join(',');
 
   useEffect(() => {
@@ -109,7 +113,7 @@ export default function PassengerPage() {
         shortName: "LIVE"
       }));
 
-  const activeBusOnRoute = activeBuses.find(b => b.routeId === selectedRouteId)?.busId;
+  const activeBusOnRoute = Object.values(activeBusesMap).find(b => b.routeId === selectedRouteId)?.busId;
 
   useEffect(() => {
     let timerId: NodeJS.Timeout;
@@ -145,8 +149,15 @@ export default function PassengerPage() {
         <div className={`absolute inset-0 z-0 ${activeTab === "map" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
           {activeRoute && targetStop ? (
             <>
-              {/* Route Selector */}
+              {/* Route Selector & Turbo/Budget Toggle */}
               <div className="absolute top-0 w-full z-40 bg-gradient-to-b from-brand-dark/95 to-transparent pt-safe px-4 pb-10 flex flex-col gap-2.5">
+                <div className="flex items-center gap-2 max-w-lg mx-auto w-full mb-1">
+                  <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 shrink-0">
+                    <button className="px-3 py-1 bg-brand-surface rounded-lg shadow text-[10px] font-black uppercase text-white tracking-widest">Turbo</button>
+                    <button className="px-3 py-1 text-[10px] font-black uppercase text-white/50 tracking-widest hover:text-white transition-colors">Budget</button>
+                    <button className="px-3 py-1 text-[10px] font-black uppercase text-white/50 tracking-widest hover:text-white transition-colors ml-1" title="Step-Free Routing">♿</button>
+                  </div>
+                </div>
                 <div className="relative w-full max-w-lg mx-auto">
                   <select
                     value={selectedRouteId}
@@ -209,11 +220,13 @@ export default function PassengerPage() {
                 </div>
               )}
 
-              {/* Messaging Overlay — bottom raised above RouteTimelineSheet on mobile */}
+              {/* Messaging Overlay — sits above bottom nav (64px) with safe-area padding */}
               {isMessagingOpen && (
-                <div className="absolute inset-x-0 top-24 bottom-[128px] sm:bottom-0 z-50 animate-slide-up flex flex-col">
+                <div className="absolute inset-x-0 top-20 bottom-[64px] z-50 animate-slide-up flex flex-col"
+                  style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+                >
                   <MessagingPanel
-                    busId={activeBuses.find(b => b.routeId === activeRoute.id)?.busId || ""}
+                    busId={Object.values(activeBusesMap).find(b => b.routeId === activeRoute.id)?.busId || ""}
                     currentUserRole="passenger"
                     currentUserId={user?.uid || "anonymous"}
                     currentUserName={user?.displayName || "Rider"}
@@ -227,13 +240,33 @@ export default function PassengerPage() {
               <PassengerMap
                 targetStop={targetStop}
                 route={activeRoute}
+                activeBusesData={activeBusesMap}
               />
             </>
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-brand-dark px-10 text-center">
-              <Loader2 className="w-10 h-10 text-white/20 animate-spin mb-6" />
-              <p className="text-white/40 text-sm font-bold uppercase tracking-[0.2em]">Waiting for a driver to go live…</p>
-              <p className="text-white/20 text-xs mt-2">Updates automatically when a driver goes online</p>
+          <div className="w-full h-full flex flex-col items-center justify-center bg-brand-dark px-8 text-center gap-6">
+              {/* Animated bus silhouette */}
+              <div className="relative flex items-center justify-center mb-2">
+                <div className="absolute w-28 h-28 rounded-full bg-white/3 animate-ping" style={{ animationDuration: '2.5s' }} />
+                <div className="absolute w-20 h-20 rounded-full bg-white/5" />
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" className="relative z-10 opacity-25">
+                  <rect x="2" y="5" width="20" height="13" rx="2" stroke="white" strokeWidth="1.5"/>
+                  <path d="M7 18v1.5M17 18v1.5" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M2 10h20" stroke="white" strokeWidth="1"/>
+                  <circle cx="6.5" cy="17" r="1.5" fill="white" fillOpacity="0.5"/>
+                  <circle cx="17.5" cy="17" r="1.5" fill="white" fillOpacity="0.5"/>
+                  <path d="M6 10V7h12v3" stroke="white" strokeWidth="1" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-white/50 text-base font-bold tracking-tight mb-1">No drivers online</p>
+                <p className="text-white/20 text-xs leading-relaxed">The map will update automatically<br/>when a driver goes live</p>
+              </div>
+              {/* Subtle route browse hint */}
+              <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/3 border border-white/5">
+                <div className="w-1.5 h-1.5 rounded-full bg-white/20 animate-pulse" />
+                <span className="text-[10px] text-white/20 font-black uppercase tracking-widest">Listening for fleet updates…</span>
+              </div>
             </div>
           )}
         </div>

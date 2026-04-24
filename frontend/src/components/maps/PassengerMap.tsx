@@ -14,11 +14,12 @@ import React from "react";
 import { rtdb } from "@/lib/firebase";
 import { ref, onValue, off } from "firebase/database";
 import { buzzController } from "@/lib/audioUtils";
-import { LocateFixed } from "lucide-react";
+import { LocateFixed, Sparkles, TriangleAlert, Award } from "lucide-react";
 
 export interface PassengerMapProps {
   targetStop: RouteStop;
   route: RouteData;
+  activeBusesData?: Record<string, IncomingBusData>;
 }
 
 interface IncomingBusData {
@@ -75,7 +76,8 @@ function createBusMarkerContent(status: string): HTMLDivElement {
   return el;
 }
 
-function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
+function PassengerMapInner(props: PassengerMapProps) {
+  const { targetStop, route } = props;
   const map = useMap();
   const markerLib = useMapsLibrary("marker");
   const geometryLib = useMapsLibrary("geometry");
@@ -90,7 +92,16 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
   const [liveDistKm, setLiveDistKm] = useState<string>("—");
   const [hasBus, setHasBus] = useState(false);
   const [stopETAs, setStopETAs] = useState<Record<string, number>>({});
+  // Tracks the stop-id for which we last fired the arrival buzz — prevents re-firing
   const lastBuzzedStopIdRef = useRef<string | null>(null);
+  // Last *bus* stop index we saw — used to detect a stop-index advance (arrival event)
+  const lastSeenBusStopIndexRef = useRef<number>(-1);
+
+  // Reset buzz guard whenever the passenger changes their target stop
+  useEffect(() => {
+    lastBuzzedStopIdRef.current = null;
+    lastSeenBusStopIndexRef.current = -1;
+  }, [targetStop.id]);
 
   // ── Passenger geolocation ──
   const [passengerLocation, setPassengerLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -204,25 +215,24 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
   }, [geometryLib, route.polyline, route.waypoints, map]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ══════════════════════════════════════════════════════════════════
-  //  2. FIREBASE REALTIME — bus positions + speed-based ETA
+  //  2. PROPS-BASED BUS UPDATES — bus positions + speed-based ETA
+  //     (Replaces isolated Firebase listener to consolidate reads)
   // ══════════════════════════════════════════════════════════════════
   useEffect(() => {
-    const busesRef = ref(rtdb, "activeBuses");
+    const data = props.activeBusesData;
+    if (!data || Object.keys(data).length === 0) {
+      rawBusesRef.current.clear();
+      setLiveEtaMinutes(0);
+      setLiveDistKm("—");
+      setHasBus(false);
+      setStopETAs({});
+      return;
+    }
 
-    const unsubscribe = onValue(busesRef, (snapshot) => {
-      const data = snapshot.val() as Record<string, IncomingBusData>;
-      if (!data) {
-        rawBusesRef.current.clear();
-        setLiveEtaMinutes(0);
-        setLiveDistKm("—");
-        setHasBus(false);
-        return;
-      }
-
-      let closestDist = Infinity;
-      let closestEta = 0;
-      let foundBusOnRoute = false;
-      const currentIds = new Set<string>();
+    let closestDist = Infinity;
+    let closestEta = 0;
+    let foundBusOnRoute = false;
+    const currentIds = new Set<string>();
 
       Object.values(data).forEach((bus) => {
         const isFresh = Date.now() - bus.timestamp < 300000;
@@ -299,11 +309,32 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
               closestEta = myEta;
             }
 
-            // Buzz when bus within 200m of passenger's target stop
+            // ── Arrival Buzz — fires ONCE when driver reaches the passenger's stop ──
+            // Primary: use driver-reported stop index (most reliable)
+            const targetStopIndex = route.stops?.findIndex(s => s.id === targetStop.id) ?? -1;
+            const busStopIdx = typeof bus.currentStopIndex === 'number' ? bus.currentStopIndex : -1;
+
+            const arrivedByIndex =
+              targetStopIndex >= 0 &&
+              busStopIdx >= 0 &&
+              busStopIdx >= targetStopIndex &&
+              lastBuzzedStopIdRef.current !== targetStop.id;
+
+            // Fallback: proximity-based trigger at 400m if driver doesn't report stop index
             const busDist = getDistanceMeters({ lat: bus.lat, lng: bus.lng }, targetStop);
-            if (busDist < 200 && lastBuzzedStopIdRef.current !== targetStop.id) {
-              buzzController.playBuzz([300, 150, 300, 150, 500]);
+            const arrivedByProximity =
+              busStopIdx < 0 &&
+              busDist < 400 &&
+              lastBuzzedStopIdRef.current !== targetStop.id;
+
+            if (arrivedByIndex || arrivedByProximity) {
+              buzzController.playBuzz(); // 2-second chime, 50% volume
               lastBuzzedStopIdRef.current = targetStop.id;
+            }
+
+            // Track bus stop index advances (used for reset logic)
+            if (busStopIdx > lastSeenBusStopIndexRef.current) {
+              lastSeenBusStopIndexRef.current = busStopIdx;
             }
           }
         }
@@ -322,13 +353,11 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
         setLiveDistKm("—");
         setStopETAs({});
       }
-    });
 
     return () => {
-      off(busesRef, "value", unsubscribe);
       cancelAnimationFrame(frameRef.current);
     };
-  }, [route.id, targetStop]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [route.id, targetStop, props.activeBusesData, activePolyRef, fullPolyRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ══════════════════════════════════════════════════════════════════
   //  3. ANIMATION LOOP — updates Google Maps markers imperatively
@@ -414,19 +443,20 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
               {stop.id === targetStop.id ? (
                 <div className="relative flex flex-col items-center">
                   <div className="absolute w-8 h-8 bg-orange-500 rounded-full" style={{ animation: "ripple 2s infinite" }} />
-                  <div className="w-8 h-8 bg-orange-500 border-4 border-orange-400 rounded-full z-10 flex items-center justify-center shadow-3xl">
+                  {/* Black border for maximum contrast against any map background */}
+                  <div className="w-8 h-8 bg-orange-500 border-4 border-black rounded-full z-10 flex items-center justify-center shadow-lg">
                     <span className="text-white font-black text-xs">{String.fromCharCode(65 + i)}</span>
                   </div>
-                  <span className="mt-2 px-4 py-1.5 bg-brand-surface border border-white/10 text-white rounded-xl text-[10px] whitespace-nowrap z-50 shadow-3xl font-black uppercase tracking-[0.2em]">
+                  <span className="mt-2 px-4 py-1.5 bg-brand-surface border border-white/10 text-white rounded-xl text-[10px] whitespace-nowrap z-50 shadow-xl font-black uppercase tracking-[0.2em]">
                     {stop.shortName}
                   </span>
                 </div>
               ) : (
-                <div className="relative flex flex-col items-center opacity-70 scale-90">
-                  <div className="flex items-center justify-center w-6 h-6 bg-orange-500 border-2 border-orange-400 rounded-full shadow-lg">
+                <div className="relative flex flex-col items-center opacity-80 scale-90">
+                  <div className="flex items-center justify-center w-6 h-6 bg-orange-500 border-2 border-black rounded-full shadow-md">
                     <span className="text-white font-black text-[10px]">{String.fromCharCode(65 + i)}</span>
                   </div>
-                  <span className="mt-1 px-2 py-0.5 bg-brand-dark/80 text-white rounded-[4px] text-[8px] whitespace-nowrap opacity-60 font-black uppercase tracking-widest">
+                  <span className="mt-1 px-2 py-0.5 bg-brand-dark/80 text-white rounded-[4px] text-[8px] whitespace-nowrap opacity-70 font-black uppercase tracking-widest">
                     {stop.shortName}
                   </span>
                 </div>
@@ -437,20 +467,41 @@ function PassengerMapInner({ targetStop, route }: PassengerMapProps) {
       </div>
 
       {/* Recenter button — bottom right, above timeline */}
-      {passengerLocation && (
-        <div className="absolute bottom-[80px] right-4 z-40">
-          <button
-            onClick={handleRecenter}
-            className={`flex items-center gap-2 px-4 py-3 rounded-2xl shadow-2xl transition-all duration-300 border active:scale-95 ${
-              isCentered
-                ? "bg-blue-500 text-white border-blue-400 opacity-70 scale-95"
-                : "bg-brand-surface text-white border-white/10"
-            }`}
-          >
-            <LocateFixed className="w-5 h-5" />
-          </button>
-        </div>
-      )}
+      {/* ── Top-RIGHT Map Controls & Gamification ── */}
+      <div className="absolute right-4 top-[100px] z-40 flex flex-col gap-3">
+        <button
+          onClick={handleRecenter}
+          className={`p-3.5 rounded-2xl shadow-xl transition-all duration-300 border ${
+            isCentered
+              ? "bg-blue-500 text-white border-blue-400 opacity-80"
+              : "bg-brand-surface/90 backdrop-blur-md text-white border-white/10 hover:bg-white/10"
+          }`}
+          title="Recenter map"
+        >
+          <LocateFixed className="w-5 h-5" />
+        </button>
+
+        <button
+          className="p-3.5 rounded-2xl shadow-xl bg-brand-surface/90 backdrop-blur-md border border-white/10 text-emerald-400 hover:bg-white/10 transition-all flex items-center justify-center animate-bounce-slow"
+          title="Confirm Cleanliness (+10 pts)"
+        >
+          <Sparkles className="w-5 h-5 flex-shrink-0" />
+        </button>
+
+        <button
+          className="p-3.5 rounded-2xl shadow-xl bg-brand-surface/90 backdrop-blur-md border border-white/10 text-amber-500 hover:bg-white/10 transition-all flex items-center justify-center"
+          title="Report Delay"
+        >
+          <TriangleAlert className="w-5 h-5 flex-shrink-0" />
+        </button>
+
+        <button
+          className="p-3.5 rounded-2xl shadow-xl bg-brand-surface/90 backdrop-blur-md border border-white/10 text-purple-400 hover:bg-white/10 transition-all flex items-center justify-center"
+          title="Digital Badges"
+        >
+          <Award className="w-5 h-5 flex-shrink-0" />
+        </button>
+      </div>
 
       {/* Navigation Timeline */}
       <RouteTimelineSheet

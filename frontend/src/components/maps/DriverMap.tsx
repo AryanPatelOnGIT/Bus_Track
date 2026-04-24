@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { LocateFixed as GPS, ArrowLeft, ChevronRight } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { LocateFixed as GPS, ArrowLeft, ChevronRight, AlertTriangle, Clock } from "lucide-react";
 import {
   Map as GoogleMap,
   AdvancedMarker,
@@ -55,6 +56,16 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
   // ── Stop Progression — purely local math, zero API calls ──
   const stops = route.stops || [];
   const [currentStopIndex, setCurrentStopIndex] = useState(0);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    // Need a tiny delay to ensure the DOM element exists after DriverPage transition
+    const timer = setTimeout(() => {
+      setPortalTarget(document.getElementById('driver-controls-panel'));
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   const nextStop = stops[currentStopIndex] ?? stops[stops.length - 1];
   const finalStop = stops[stops.length - 1];
 
@@ -256,7 +267,8 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
     if (!map || navPhase !== "navigating" || !geometryLib) return;
     clearPreviewPolylines();
 
-    if (!fullPolyRef.current || !activePolyRef.current) {
+    // Create polylines once per navigation session
+    if (!fullPolyRef.current) {
       fullPolyRef.current = new google.maps.Polyline({
         map,
         strokeColor: "#9aa0a6",
@@ -264,26 +276,37 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
         strokeOpacity: 0.9,
         zIndex: 40,
       });
+    }
+    if (!activePolyRef.current) {
       activePolyRef.current = new google.maps.Polyline({
         map,
         strokeColor: "#3b82f6",
         strokeWeight: 6,
         strokeOpacity: 1.0,
         zIndex: 50,
+        // Start with empty path — slicing effect will populate it on first GPS update
+        // This ensures the "covered" grey portion shows through immediately
       });
     }
 
     if (activePath.length > 0) {
+      // Full grey route: always shows entire path (covered portion appears grey underneath)
       fullPolyRef.current.setPath(activePath);
-      activePolyRef.current.setPath(activePath);
-    } else {
-      // Fallback: draw straight lines between stops
+      // Blue active path: starts at bus position, updated by slicing effect below
+      // Only set here on first load if the slicing effect hasn't run yet
+      if (!activePolyRef.current.getPath().getLength()) {
+        activePolyRef.current.setPath(activePath);
+      }
+    } else if (!fullPolyRef.current.getPath().getLength()) {
+      // Fallback: draw straight lines between stops only if no path is set yet
       const fallbackPath = stops.map(s => new google.maps.LatLng(s.lat, s.lng));
       fullPolyRef.current.setPath(fallbackPath);
-      activePolyRef.current.setPath(fallbackPath);
     }
 
-    return () => { clearNavPolylines(); };
+    // Cleanup: only remove polylines when leaving navigating phase
+    return () => {
+      if (navPhase === "navigating") clearNavPolylines();
+    };
   }, [map, navPhase, geometryLib, activePath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Slicing: Active Path is blue from bus location onwards
@@ -528,23 +551,25 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
                     className="absolute w-8 h-8 bg-orange-500 rounded-full"
                     style={{ animation: "ripple 2s infinite" }}
                   />
-                  <div className="w-8 h-8 bg-orange-500 border-4 border-orange-400 rounded-full z-10 flex items-center justify-center">
+                  {/* Black border for maximum visibility against any map background */}
+                  <div className="w-8 h-8 bg-orange-500 border-4 border-black rounded-full z-10 flex items-center justify-center shadow-lg">
                     <span className="text-white font-black text-xs">{String.fromCharCode(65 + i)}</span>
                   </div>
-                  <span className="mt-2 px-3 py-1 bg-brand-surface border border-brand-dark text-white rounded-xl text-[10px] font-bold uppercase tracking-widest z-20 shadow-3xl">
+                  <span className="mt-2 px-3 py-1 bg-brand-surface border border-white/20 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest z-20 shadow-xl">
                     {stop.shortName}
                   </span>
                 </div>
               ) : i < currentStopIndex ? (
-                <div className="flex items-center justify-center w-6 h-6 bg-orange-500/60 border-2 border-orange-400/50 rounded-full opacity-60 shadow-lg">
+                // Already visited — dimmed with black border
+                <div className="flex items-center justify-center w-6 h-6 bg-orange-300/60 border-2 border-black/40 rounded-full opacity-50 shadow">
                   <span className="text-white font-black text-[10px]">{String.fromCharCode(65 + i)}</span>
                 </div>
               ) : (
                 <div className="relative flex flex-col items-center">
-                  <div className="flex items-center justify-center w-6 h-6 bg-orange-500 border-2 border-orange-400 rounded-full shadow-lg">
+                  <div className="flex items-center justify-center w-6 h-6 bg-orange-500 border-2 border-black rounded-full shadow-md">
                     <span className="text-white font-black text-[10px]">{String.fromCharCode(65 + i)}</span>
                   </div>
-                  <span className="mt-1 px-2 py-0.5 bg-brand-dark/80 text-white rounded-[4px] text-[8px] whitespace-nowrap opacity-60 font-black uppercase tracking-widest">
+                  <span className="mt-1 px-2 py-0.5 bg-brand-dark/80 text-white rounded-[4px] text-[8px] whitespace-nowrap opacity-70 font-black uppercase tracking-widest">
                     {stop.shortName}
                   </span>
                 </div>
@@ -582,74 +607,94 @@ function DriverMapInner({ route, driverLocation, socketRef, busId, onEndShift, i
         </button>
       </div>
 
-      {/* ── Bottom Panel — fixed above nav bar so nothing is clipped ── */}
-      <div className="absolute bottom-[70px] left-0 right-0 z-50">
-        {navPhase === "preview" ? (
-          <RoutePreviewCards
-            routes={routeSummaries}
-            selectedIndex={previewSelectedIdx}
-            onSelect={selectPreviewRoute}
-            onStart={handleStartNavigation}
-            isLoading={previewLoading && previewRoutes.length === 0}
-          />
+      {/* ── Driver Controls Container ── */}
+      {(() => {
+        const controls = navPhase === "preview" ? (
+          <div className={portalTarget ? "p-4 h-full" : "absolute bottom-[70px] left-0 right-0 z-50"}>
+            <RoutePreviewCards
+              routes={routeSummaries}
+              selectedIndex={previewSelectedIdx}
+              onSelect={selectPreviewRoute}
+              onStart={handleStartNavigation}
+              isLoading={previewLoading && previewRoutes.length === 0}
+            />
+          </div>
         ) : (
-          <RouteTimelineSheet
-            route={route}
-            targetStopId={stops[stops.length - 1]?.id || ""}
-            activeBusId={busId}
-            stopETAs={upcomingETAs}
-            headerContent={
-              <div className="flex items-center w-full justify-between mt-2 pl-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
-                  <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest leading-none">
-                    Transmitting
-                  </span>
-                  {delayMinutes > 0 && (
-                    <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-black uppercase tracking-widest">
-                      +{delayMinutes} MIN
+          <div className={portalTarget ? "flex-1 min-h-0 flex flex-col h-full" : "absolute bottom-[70px] left-0 right-0 z-50"}>
+            <RouteTimelineSheet
+              route={route}
+              targetStopId={stops[stops.length - 1]?.id || ""}
+              activeBusId={busId}
+              stopETAs={upcomingETAs}
+              isEmbedded={!!portalTarget}
+              headerContent={
+                <div className="flex items-center w-full justify-between mt-2 pl-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
+                    <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest leading-none">
+                      Transmitting
                     </span>
+                    {delayMinutes > 0 && (
+                      <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[9px] font-black uppercase tracking-widest">
+                        +{delayMinutes} MIN
+                      </span>
+                    )}
+                  </div>
+                  {onEndShift && isTracking && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onEndShift(); }}
+                      className="h-8 px-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[9px] font-black uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white transition-all pointer-events-auto"
+                    >
+                      End Shift
+                    </button>
                   )}
                 </div>
-                {onEndShift && isTracking && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onEndShift(); }}
-                    className="h-8 px-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[9px] font-black uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white transition-all pointer-events-auto"
-                  >
-                    End Shift
-                  </button>
-                )}
-              </div>
-            }
-            bottomControls={
-              <div className="flex items-center gap-2 justify-between w-full">
-                {/* Left: delay controls */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] font-black text-white/30 uppercase tracking-widest mr-1">Delay</span>
-                  <button onClick={() => pushDelay(-2)} className="h-9 w-12 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black hover:bg-blue-500/30 active:scale-90 transition-all flex items-center justify-center">-2</button>
-                  <button onClick={() => pushDelay(-1)} className="h-9 w-12 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black hover:bg-blue-500/30 active:scale-90 transition-all flex items-center justify-center">-1</button>
-                  <div className="px-2 min-w-[36px] text-center">
-                    <span className={`text-sm font-black ${delayMinutes > 0 ? 'text-amber-400' : 'text-white/20'}`}>{delayMinutes > 0 ? `+${delayMinutes}` : '0'}</span>
-                    <div className="text-[7px] text-white/20 uppercase tracking-widest">min</div>
+              }
+              bottomControls={
+                <div className="flex flex-col gap-3 w-full">
+                  <div className="flex items-center gap-2 justify-between w-full">
+                    {/* Left: delay controls */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-black text-white/30 uppercase tracking-widest mr-1">Delay</span>
+                      <button onClick={() => pushDelay(-2)} className="h-9 w-12 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black hover:bg-blue-500/30 active:scale-90 transition-all flex items-center justify-center">-2</button>
+                      <button onClick={() => pushDelay(-1)} className="h-9 w-12 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black hover:bg-blue-500/30 active:scale-90 transition-all flex items-center justify-center">-1</button>
+                      <div className="px-2 min-w-[36px] text-center">
+                        <span className={`text-sm font-black ${delayMinutes > 0 ? 'text-amber-400' : 'text-white/20'}`}>{delayMinutes > 0 ? `+${delayMinutes}` : '0'}</span>
+                        <div className="text-[7px] text-white/20 uppercase tracking-widest">min</div>
+                      </div>
+                      <button onClick={() => pushDelay(1)} className="h-9 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black hover:bg-amber-500/30 active:scale-90 transition-all flex items-center justify-center">+1</button>
+                      <button onClick={() => pushDelay(2)} className="h-9 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black hover:bg-amber-500/30 active:scale-90 transition-all flex items-center justify-center">+2</button>
+                    </div>
+                    {/* Right: manual next-stop */}
+                    {currentStopIndex < stops.length - 1 && (
+                      <button
+                        onClick={handleManualNextStop}
+                        className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white/5 border border-white/10 text-white/60 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 active:scale-90 transition-all shrink-0"
+                      >
+                        Next Stop
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
-                  <button onClick={() => pushDelay(1)} className="h-9 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black hover:bg-amber-500/30 active:scale-90 transition-all flex items-center justify-center">+1</button>
-                  <button onClick={() => pushDelay(2)} className="h-9 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-black hover:bg-amber-500/30 active:scale-90 transition-all flex items-center justify-center">+2</button>
+                  {/* SOS and Headway Warning Anchored Modules */}
+                  {portalTarget && (
+                    <div className="grid grid-cols-2 gap-2 mt-1">
+                      <button className="h-12 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-500 font-black tracking-widest text-[10px] uppercase border border-red-500/30 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-red-500/10">
+                        <AlertTriangle className="w-4 h-4" /> SOS EMERGENCY
+                      </button>
+                      <button className="h-12 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 font-black tracking-widest text-[10px] uppercase border border-amber-500/30 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-amber-500/10">
+                        <Clock className="w-4 h-4" /> Headway Warning
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {/* Right: manual next-stop */}
-                {currentStopIndex < stops.length - 1 && (
-                  <button
-                    onClick={handleManualNextStop}
-                    className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white/5 border border-white/10 text-white/60 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 active:scale-90 transition-all"
-                  >
-                    Next Stop
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            }
-          />
-        )}
-      </div>
+              }
+            />
+          </div>
+        );
+
+        return portalTarget ? createPortal(controls, portalTarget) : controls;
+      })()}
     </>
   );
 }

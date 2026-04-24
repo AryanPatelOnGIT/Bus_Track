@@ -182,8 +182,8 @@ export default function DriverPage() {
     <div className="flex flex-col bg-brand-dark text-white overflow-hidden" style={{ height: "100dvh" }}>
       <div className="relative flex-1 flex flex-col overflow-hidden min-h-0">
 
-        <div className={`absolute inset-0 z-0 flex flex-col ${activeTab === "map" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-          <div className="flex-1 relative z-0 min-h-0">
+        <div className={`absolute inset-0 z-0 grid ${activeTab === "map" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"} grid-rows-[1fr_auto] md:grid-rows-1 md:grid-cols-[1fr_360px]`}>
+          <div className="relative min-h-0 min-w-0 row-start-1 md:col-start-1">
             {activeRoute && (
               <DriverMap
                 route={activeRoute}
@@ -198,8 +198,11 @@ export default function DriverPage() {
             )}
           </div>
 
-          {!isTracking && (
-            <div className="shrink-0 z-10 w-full">
+          <div 
+            id="driver-controls-panel"
+            className={`relative shrink-0 z-10 w-full row-start-2 md:col-start-2 md:row-start-1 md:h-full bg-brand-dark/95 backdrop-blur-md md:border-l border-t md:border-t-0 border-white/10 flex flex-col overflow-y-auto ${isTracking ? 'h-64 md:h-auto' : ''}`}
+          >
+            {!isTracking && (
               <TransmitterControls
                 busId={busId}
                 driverId={driverId}
@@ -215,8 +218,8 @@ export default function DriverPage() {
                 onRouteUpdate={handleRouteUpdate}
                 isSocketConnected={true}
               />
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className={`absolute inset-0 z-10 flex flex-col bg-brand-dark transition-opacity duration-300 ${activeTab === "profile" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
@@ -254,9 +257,12 @@ export default function DriverPage() {
           </div>
         )}
 
-        {/* Messaging Overlay */}
+        {/* Messaging Overlay — sits above the bottom nav bar */}
         {isMessagingOpen && (
-          <div className="absolute inset-x-0 bottom-0 top-0 z-50 animate-slide-up">
+          <div
+            className="absolute inset-x-0 top-0 bottom-0 z-50 animate-slide-up"
+            style={{ bottom: "64px" }}
+          >
             <MessagingPanel
               busId={busId}
               currentUserRole="driver"

@@ -11,6 +11,7 @@ import {
   stopETATracking,
   getAllETAs,
 } from "../lib/etaService";
+import { getSmoothedLocation, clearTrajectory } from "../lib/trajectorySmoother";
 
 // Initial data for tracking system
 export const activeBuses = new Map<string, BusLocation>();
@@ -321,8 +322,11 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
         routeIds: metadata?.routeIds,
       };
 
-      activeBuses.set(data.busId, busLocation);
-      setRTDBLocation(data.busId, data.driverId, metadata?.routeIds || [], busLocation);
+      // Apply Trajectory Smoothing (Kalman Filter proxy)
+      const smoothedLocation = getSmoothedLocation(data.busId, busLocation);
+
+      activeBuses.set(data.busId, smoothedLocation);
+      setRTDBLocation(data.busId, data.driverId, metadata?.routeIds || [], smoothedLocation);
       if ((metadata?.routeIds || []).length === 0) {
         console.warn(`[driver:location-update] No routeIds for ${data.busId} — RTDB not written. Payload:`, JSON.stringify(data));
       }
@@ -337,9 +341,9 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
         console.error(`❌ [Firestore] bus_locations write FAILED for ${data.busId}:`, err);
       }
 
-      io.to("admin").emit("bus:location-update", busLocation);
-      io.to("passengers").emit("bus:location-update", busLocation);
-      io.to(`bus:${data.busId}`).emit("bus:location-update", busLocation);
+      io.to("admin").emit("bus:location-update", smoothedLocation);
+      io.to("passengers").emit("bus:location-update", smoothedLocation);
+      io.to(`bus:${data.busId}`).emit("bus:location-update", smoothedLocation);
     });
 
     socket.on("driver:stop-tracking", (payload) => {
@@ -354,6 +358,7 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
       busMetadata.delete(busId);
       socketBusMap.delete(socket.id);
       stopETATracking(busId);
+      clearTrajectory(busId);
       locationRateMap.delete(socket.id); // Clean up rate limit entry
       io.to("admin").emit("bus:stop-tracking", { busId });
       io.to("passengers").emit("bus:stop-tracking", { busId });
@@ -442,6 +447,7 @@ export function trackingGateway(io: Server<ClientToServerEvents, ServerToClientE
         if (mdata) clearRTDBLocation(busId, mdata.routeIds || []);
         busMetadata.delete(busId);
         stopETATracking(busId);
+        clearTrajectory(busId);
         io.to("admin").emit("bus:stop-tracking", { busId });
         io.to("passengers").emit("bus:stop-tracking", { busId });
         // Mark as inactive in Firestore

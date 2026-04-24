@@ -11,6 +11,7 @@ interface RouteTimelineSheetProps {
   bottomControls?: React.ReactNode;
   /** Walking ETA in minutes to the targetStop (from passenger's current location) */
   walkMinutesToTarget?: number;
+  isEmbedded?: boolean;
 }
 
 export default function RouteTimelineSheet({
@@ -21,6 +22,7 @@ export default function RouteTimelineSheet({
   headerContent,
   bottomControls,
   walkMinutesToTarget,
+  isEmbedded = false,
 }: RouteTimelineSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -44,18 +46,20 @@ export default function RouteTimelineSheet({
 
       {/* Sheet */}
       <div
-        className={`fixed inset-x-0 bottom-[64px] z-50 bg-brand-dark border-t border-white/10 rounded-t-3xl shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+        className={isEmbedded 
+          ? "flex flex-col w-full h-full bg-brand-dark" 
+          : `fixed inset-x-0 bottom-[64px] z-50 bg-brand-dark border-t border-white/10 rounded-t-3xl shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${
           isOpen ? "translate-y-0" : "translate-y-[calc(100%-64px)]"
         }`}
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        style={isEmbedded ? {} : { paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {/* Drag Handle / Header — tap to expand */}
-        <div
-          className="w-full h-[60px] flex items-center justify-between px-6 cursor-pointer relative"
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-white/20 rounded-full" />
-          {headerContent || (
+        {!isEmbedded && (
+          <div
+            className="w-full h-[60px] flex items-center justify-between px-6 cursor-pointer relative shrink-0"
+            onClick={() => setIsOpen(!isOpen)}
+          >
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-white/20 rounded-full" />
             <div className="flex items-center w-full justify-between mt-2">
               <div className="flex items-center gap-3">
                 <Navigation className="w-4 h-4 text-white/50" />
@@ -67,11 +71,17 @@ export default function RouteTimelineSheet({
                 {isOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+        
+        {isEmbedded && headerContent && (
+          <div className="shrink-0">
+            {headerContent}
+          </div>
+        )}
 
         {/* Content (Scrollable list of stops) */}
-        <div className="px-6 pb-4 pt-2 h-[50vh] max-h-[400px] overflow-y-auto">
+        <div className={`px-6 pb-4 pt-2 overflow-y-auto ${isEmbedded ? "flex-1 min-h-0" : "h-[50vh] max-h-[400px]"}`}>
           <div className="text-[10px] font-bold text-white/30 uppercase tracking-[0.1em] mb-4 text-center">
             {route.name}
           </div>

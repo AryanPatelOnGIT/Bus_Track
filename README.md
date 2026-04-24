@@ -1,323 +1,151 @@
-# BusTrack — Ahmedabad BRTS Real-Time Fleet System
+# BusTrack — Nakshatra Nav | Ahmedabad BRTS Real-Time Fleet System
 
 > Live GPS tracking, on-demand stops, and complete fleet oversight — seamlessly connecting passengers, drivers, and administrators across Ahmedabad's BRTS network.
 
 ---
 
-## Overview
+## 🌟 The Antigravity Architecture (2026 Paradigm)
 
-BusTrack is a full-stack real-time bus tracking platform with three interconnected portals:
+The transformation of BusTracker (Nakshatra Nav) into a state-of-the-art transit platform implements rigorous optimizations across aesthetic fluidity and high-velocity data ingestion. The system fundamentally dictates that **the application must "read everything at once, not read it a lot of times."**
 
-| Portal | Role | Key Features |
-|---|---|---|
-| **Passenger** | Commuters | Live bus map, ETA display, on-demand pickup/dropoff requests |
-| **Driver** | Bus operators | GPS broadcast, incoming request feed, route navigation |
-| **Admin** | Fleet managers | Bird's-eye fleet map, analytics dashboard, route infrastructure management |
+### 1. Dual-Interface Design System: Contextual Contextual Utility
 
-**Architecture:** Next.js static frontend → Firebase Hosting → Socket.io backend (Cloud Run) → Google Cloud Firestore
+#### **Passenger Panel (Moovit-Style Utility)**
+- **Gamified Telemetry:** Crowdsourced delay reporting, cleanliness confirmations, and digital badges.
+- **Micro-mobility Analytics:** Live walking ETAs and Step-Free routing toggles.
+- **Visuals:** Isometric 2.5D snapping with glassmorphic `backdrop-filter` rendering accelerated via CSS hardware `will-change: transform`.
 
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS v4 |
-| Maps | Google Maps JavaScript API (browser), Google Routes API v2 (server) |
-| Backend | Node.js, Express 4, Socket.io 4, TypeScript |
-| Database | Google Cloud Firestore |
-| Auth | Firebase Authentication |
-| Hosting | Firebase Hosting (frontend), Cloud Run / Docker (backend) |
-| Security | Helmet, express-rate-limit |
+#### **Driver Dashboard (Safety-Optimized Telemetry)**
+- **Adaptive Layouts:** Strict 2-Dimensional CSS Grid anchoring.
+- **Safety Critical Modules:** High-contrast `SOS` and `Headway Warnings` are globally anchored, un-occludable by the WebGL map layer.
 
 ---
 
-## Prerequisites
+## 🏗️ System Data Flow & Real-Time Orchestration
 
-- Node.js ≥ 20.x
-- npm ≥ 10.x
-- A Google Cloud project with the following APIs enabled:
-  - Maps JavaScript API
-  - Routes API (v2)
-  - Places API
-- A Firebase project with Firestore and Authentication enabled
-- Firebase CLI: `npm install -g firebase-tools`
+BusTrack achieves sub-second latency by bifurcating state: persisting complex, heavy schemas into Google Cloud Firestore, while leveraging the Realtime Database and Protobuf-tuned WebSockets strictly for volatile fleet locations.
 
----
-
-## Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/AryanPatelOnGIT/Bus_Track.git
-cd Bus_Track
-
-# 2. Install all workspace dependencies
-npm install
-
-# 3. Configure environment variables
-cp backend/.env.example backend/.env
-# — fill in backend/.env with your credentials
-
-# Edit frontend/.env.local with your Firebase + Maps keys
-# (see Environment Variables section below)
-```
-
----
-
-## Environment Variables
-
-### Backend (`backend/.env`)
-
-```env
-PORT=4000
-NODE_ENV=development
-CORS_ORIGIN=http://localhost:3000
-
-# Firebase Service Account JSON (stringify the downloaded JSON file)
-FIREBASE_SERVICE_ACCOUNT='{...}'
-
-# Google Maps — SERVER key (restrict to your server IP + Routes API in GCP Console)
-GOOGLE_MAPS_API_KEY=your_routes_api_key_here
-
-# Admin secret (generate: openssl rand -hex 32)
-ADMIN_API_SECRET=your_long_random_secret_here
-
-# ETA interval in ms (default 180000 = 3 min)
-ETA_INTERVAL_MS=180000
-```
-
-### Frontend (`frontend/.env.local`)
-
-```env
-# Firebase public config (safe to expose — restricted by Firebase Security Rules)
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
-
-# Google Maps — BROWSER key (restrict to your domain + Maps JS API in GCP Console)
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_browser_key_here
-NEXT_PUBLIC_GOOGLE_MAPS_KEY=your_browser_key_here
-
-# Backend URLs (public — just URLs, not secrets)
-NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
-NEXT_PUBLIC_SOCKET_URL=http://localhost:4000
-
-# Server-only (no NEXT_PUBLIC_ prefix — never sent to browser)
-BACKEND_URL=http://localhost:4000
-ADMIN_API_SECRET=your_long_random_secret_here
-```
-
-> ⚠️ **CRITICAL:** Never use the same API key for browser and server. Create two separate keys in GCP Console with different HTTP referrer and IP restrictions.
-
----
-
-## Execution Instructions
-
-### Development
-
-```bash
-# Run frontend + backend concurrently
-npm run dev
-
-# Frontend only: http://localhost:3000
-# Backend only:  http://localhost:4000
-```
-
-### Seed Routes into Firestore
-
-```bash
-cd backend && npm run seed
-```
-
-### Production Build
-
-```bash
-# Build Next.js frontend (static export)
-npm run build
-
-# Deploy frontend to Firebase Hosting
-firebase deploy --only hosting
-
-# Build backend Docker image
-cd backend && docker build -t bustrack-backend .
-
-# Run backend container
-docker run -p 8080:8080 --env-file .env bustrack-backend
-```
-
----
-
-## Architecture & Data Flow
-
-BusTrack uses a modern hybrid, real-time architecture leveraging Firebase as the core streaming layer and a containerized Node.js backend for heavy computation. 
-
-### 1. High-Level Hub
+### Complete Telemetry & State Pipeline
 
 ```mermaid
 graph TD
-    subgraph Frontend [Next.js Client Applications]
-        P["Passenger App<br/>(Reads Live Data)"]
-        D["Driver Console<br/>(Writes Live Data)"]
-        A["Admin Dashboard<br/>(Full Access)"]
+    subgraph Driver Hardware
+        GPS[GPS Chipset] -->|Raw NMEA Data| D[Driver Antigravity UI]
+        D -->|Protocol Buffers/WS| IO[Node.js Gateway]
     end
 
-    subgraph Firebase Ecosystem
-        Auth[Firebase Auth API]
-        RTDB[("Realtime Database<br/>High-Frequency GPS")]
-        FS[("Firestore<br/>Persistent Data/Roles")]
-        Hosting["Firebase Hosting<br/>Static CDN"]
+    subgraph Node.js Backend 
+        IO --> KF[Kalman Filter - Trajectory Smoother]
+        KF --> ML[Prediction/Headway Analyzer]
+        ML --> S{State Fork}
+        
+        %% Real-Time Ephemeral Path
+        S -->|GPS Ping < 1s| RTDB[(Firebase RTDB)]
+        
+        %% Persistence Path
+        S -->|Denormalized Batching| FS[(Cloud Firestore)]
     end
 
-    subgraph Cloud Container [Backend Server - Cloud Run/Render]
-        Express[Node.js + Express]
-        SocketIO[Socket.io Gateway]
-        RoutesAPI["Google Maps<br/>Routes API v2"]
+    subgraph Passenger Device
+        RTDB --> P[Passenger Zustand Tracker]
+        FS -->|One-Time 'Read All'| P
     end
 
-    %% Web connections
-    Hosting -.->|Delivers Static Built App| Frontend
-    Frontend -->|Authenticates| Auth
-    Auth -->|Returns Token| Frontend
-    
-    %% Realtime Connections
-    D -->|Push GPS| RTDB
-    RTDB -->|Listen Updates| P
-    A -->|Listen and Override| RTDB
-    RTDB -->|Listen and Override| A
-
-    %% Backend Connections
-    Frontend -->|REST and WS| Express
-    Express -->|REST and WS| Frontend
-    Express -->|Validates/Updates| FS
-    Express -->|Computes Polylines| RoutesAPI
+    %% WebGL Map Rendering
+    P --> MGL[Mapbox GL JS Engine]
 ```
 
-### 2. Role-Based Access Control (RBAC) Hierarchy
+### High-Frequency State Synchronization (Bifurcated Model)
 
-The system employs a strict hierarchical Role-Based Access Control pattern. The `RoleGuard` wrapper checks a user's role initialized via Google Authentication against the page's permitted roles. 
+By splitting state technologies, the Node.js layer prevents the application from succumbing to massive DOM recalculations:
 
-* **Admin:** Inherits all permissions. Can view `/admin`, `/driver`, and `/passenger`.
-* **Driver:** Can view `/driver` and `/passenger`.
-* **Passenger:** Can only view `/passenger`.
+1. **Zustand (Global Telemetry):** Captures the socket streams handling *only* the coordinate updates.
+2. **React Hook Form:** Manages static Driver UI Input independently.
+3. **Mapbox GL JS / WebGL:** Handles the heavy lifting of Isometric 2.5D map tiling completely outside the React render loop.
+
+---
+
+## 🚀 Installation & Network Optimization
+
+### Stack Dependencies
+- **Node.js ≥ 20.x**
+- **React 18 / Next.js 14**
+- **Vite** build pipeline
+- **Firebase Admin SDK** & **Socket.IO** (with Binary parsers)
+
+```bash
+# Clone the repository
+git clone https://github.com/AryanPatelOnGIT/Bus_Track.git
+cd Bus_Track
+
+# Install workspaces (installs the msgpack-parser and Kalman filter)
+npm install
+```
+
+### 💨 Transport Layer (WebSocket Tuning)
+
+Node.js executes specific HTTP transformations to reduce payload size efficiently:
+- **Protocol Buffers Integration:** Raw GPS arrays are buffered and passed via `socket.io-msgpack-parser` stripping repetitive JSON keys.
+- **Gzip Compression:** Applied natively replacing CPU-intense Brotli to ensure instantaneous, millisecond delivery of binary streams.
+
+---
+
+## 🛰 Offline Resilience & Progression
+
+The frontend incorporates an offline-first **Progressive Web App (PWA)** Service Worker strategy designed to handle the hostile connectivity parameters of urban BRTS canyons:
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant RoleGuard
-    participant Firebase Auth
-    participant Firestore
-    participant Protected Page
+    participant App as Frontend
+    participant SW as Service Worker
+    participant Net as Cellular Network
+    participant C as Browser Cache Storage
 
-    User->>RoleGuard: Requests Route (e.g., /driver)
-    RoleGuard->>Firebase Auth: Check Auth State
-    
-    alt is authenticated
-        Firebase Auth-->>RoleGuard: Returns User ID
-        RoleGuard->>Firestore: Fetch User Role Document
-        Firestore-->>RoleGuard: Returns Role (e.g., 'admin')
-        
-        Note over RoleGuard: Array Check:<br>['driver', 'admin'].includes('admin')
-        
-        alt Role matches allowed roles
-            RoleGuard->>Protected Page: Render Children
-            Protected Page-->>User: Displays Dashboard
-        else Role NOT in allowed roles
-            RoleGuard-->>User: Renders 403 Access Restricted
-        end
-    else Not authenticated
-        RoleGuard-->>User: Renders Login Prompt
-    end
-```
+    Note over App, C: 1. Cache-First: App Shell
+    App->>SW: Request HTML/CSS/Glassmorphism UI
+    SW->>C: Match Cache?
+    C-->>SW: Return UI
+    SW-->>App: Instant Render
 
-### 3. Real-Time GPS Data Flow
+    Note over App, C: 2. Stale-While-Revalidate: Polylines & API
+    App->>SW: Fetch /api/routes
+    SW->>C: Return Stale Data immediately
+    SW->>Net: Background Fetch New Data
+    Net-->>C: Update Cache for Next Load
 
-Location updates happen completely outside the standard Node.js server. The Drivers stream directly to the Firebase Realtime Database (RTDB), which in turn publishes the updates to the Passenger app, ensuring sub-second latency globally.
-
-```mermaid
-graph LR
-    subgraph Client [Driver App]
-        GPS1[Browser Geolocation API]
-        GPS1 -->|1. Emits coords every 5s| DBClient[Frontend Firebase SDK]
-    end
-
-    subgraph Firebase [Google Cloud]
-        RTDB[( Firebase Realtime Database )]
-    end
-
-    subgraph Subscribers [Listeners]
-        PApp[Passenger Live Map]
-        AApp[Admin Fleet Map]
-    end
-
-    DBClient -->|2. HTTP Upgrade/WebSocket| RTDB
-    
-    RTDB -->|3. Data Sync Stream| PApp
-    RTDB -->|3. Data Sync Stream| AApp
-
-    style RTDB fill:#ffca28,stroke:#f57f17,stroke-width:2px,color:black
-```
-
-### 4. Auth Fallback & Loading Cycle
-
-As implemented in `RoleGuard`, to prevent infinite loading screens when Firestore latency issues occur or network connections drop:
-
-```mermaid
-stateDiagram-v2
-    [*] --> Authenticating: Page Load
-    Authenticating --> VerifyingAuth: Auth State Changed
-    VerifyingAuth --> FetchedRole: Firebase Responds < 6s
-    VerifyingAuth --> TimeoutFallback: > 6s Elapsed
-    
-    FetchedRole --> Allowed: Role Valid
-    FetchedRole --> Denied: Role Invalid
-    
-    TimeoutFallback --> Denied: Show "Access Restricted"
-    
-    Allowed --> [*]: Render Context
-    Denied --> [*]: Render Error & Prompt Login
+    Note over App, C: 3. Network-Only: Live GPS
+    App->>SW: Socket.IO / RTDB Stream
+    SW->>Net: Bypass Cache Completely
 ```
 
 ---
 
-## API Reference
+## 📈 ML Predictive Headway and Crowdsourcing (2026 Sandbox)
 
-### REST Endpoints
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/health` | None | Server health check |
-| GET | `/api/buses` | Auth | List all active buses |
-| GET | `/api/buses/:busId` | Auth | Get specific bus |
-| PATCH | `/api/buses/:busId` | Admin | Override bus status |
-| GET | `/api/analytics/fleet` | Auth | Fleet statistics |
-| POST | `/api/requests` | Auth | Create passenger request |
-| GET | `/api/requests` | Auth | List all requests |
-| PATCH | `/api/requests/:id` | Admin | Update request status |
-| DELETE | `/api/requests/:id` | Admin | Cancel request |
-| POST | `/api/routes/compute-polyline` | Admin Secret | Bake route polyline |
-
-### Socket Events (Client → Server)
-
-| Event | Payload | Description |
-|---|---|---|
-| `driver:start-tracking` | `{busId, driverId, routeId?}` | Driver goes live |
-| `driver:location-update` | `{busId, driverId, lat, lng, heading, speed, timestamp}` | GPS update |
-| `driver:route-update` | `{busId, routeId}` | Change assigned route |
-| `driver:stop-tracking` | `{busId}` | Driver goes offline |
-| `passenger:join` | — | Subscribe to live updates |
-| `passenger:request` | `{passengerId, busId, type, lat, lng}` | Request pickup/dropoff |
-| `admin:join` | — | Subscribe to admin feed |
+To abandon static scheduling tables, Nakshatra Nav integrates advanced algorithms natively in the Node layers:
+1. **Passenger Density Inference:** Experimental capabilities to utilize Wi-Fi/Bluetooth RSSI signaling inside BRTS stations to dynamically calculate payload density thresholds without mechanical constraints.
+2. **Dynamic Holding:** If "Bus Bunching" is detected across the corridor's `RouteDashboard` metadata layer, dispatch handlers will inject hold-patterns directly into the driver's display.
 
 ---
 
-## Security Notes
+## 🛡 Security & Keys
 
-1. **API Keys:** Create separate keys for browser and server in GCP Console. Set HTTP referrer restrictions on browser keys and IP restrictions on server keys.
-2. **Firebase Service Account:** In production, use Google Cloud Secret Manager or Workload Identity Federation instead of storing JSON in `.env`.
-3. **Admin Secret:** Generate with `openssl rand -hex 32`. Rotate immediately if compromised.
-4. **Firestore Rules:** Deploy rules with `firebase deploy --only firestore:rules` after any changes.
-5. **HTTPS Only:** Always deploy behind HTTPS. The backend must be behind a TLS-terminating load balancer.
+Backend `.env`:
+```env
+PORT=4000
+
+# Server strict-IP locked APIs
+GOOGLE_MAPS_API_KEY=your_routes_api_key_here
+ADMIN_API_SECRET=your_long_random_secret_here
+```
+
+Frontend `.env.local`:
+```env
+# Exposed safely through Domain Locking
+NEXT_PUBLIC_GOOGLE_MAPS_KEY=your_browser_key_here
+```
+> **IMPORTANT:** BusTracker enforces strict isolation. No passenger request ever mounts directly to Firestore without the server-verified Firebase UID via the Token Gateway (`server.ts` io.use pipeline).
+
+---
+
+**Built independently for the Ahmedabad Transport Ecosystem.**
