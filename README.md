@@ -1,6 +1,6 @@
 # BusTrack — Ahmedabad BRTS Real-Time Fleet System
 
-> Live GPS tracking, on-demand stops, and complete fleet oversight — seamlessly connecting passengers, drivers, and administrators across Ahmedabad's BRTS network.
+> Live GPS tracking, on-demand stops, and complete fleet oversight — seamlessly connecting passengers, drivers, and administrators across Ahmedabad's BRTS network. Made for our university as a side project (basically a MVP so in the next phase, we can integrate hardware)
 
 ---
 
