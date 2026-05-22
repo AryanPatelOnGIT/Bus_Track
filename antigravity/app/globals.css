@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --color-dark-bg: #0A0A0A;
+  --color-dark-surface: #141414;
+  --color-dark-border: #222222;
+  --color-dark-input: #1A1A1A;
+  --color-dark-input-border: #333333;
+  --color-dark-button: #1E1E1E;
+  --color-text-primary: #F5F5F5;
+  --color-text-secondary: #888888;
+  --color-text-inactive: #555555;
+  --color-accent: #E8E8E8;
+  --color-danger: #C0392B;
+  --color-success: #27AE60;
+  --font-mono: 'DM Mono', monospace;
+  --font-sans: 'Inter', sans-serif;
+}
+
+body {
+  background-color: #0A0A0A;
+  color: #F5F5F5;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  padding: 0;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0A0A0A;
+}
+::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555555;
+}
+
+.leaflet-container {
+  background: #0A0A0A !important;
+}
+.leaflet-control-zoom a {
+  background-color: #1E1E1E !important;
+  color: #F5F5F5 !important;
+  border-color: #333333 !important;
+}
+.leaflet-control-attribution {
+  background-color: rgba(20, 20, 20, 0.8) !important;
+  color: #888888 !important;
+  font-size: 10px !important;
+}
+.leaflet-control-attribution a {
+  color: #888888 !important;
+}
+
+@keyframes pulse-dot {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.4s infinite ease-in-out;
+}
+.pulse-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.pulse-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.msg-enter {
+  animation: slide-up 0.2s ease-out;
+}

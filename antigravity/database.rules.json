@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "buses": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "messages": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
