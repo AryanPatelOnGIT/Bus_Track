@@ -2,7 +2,6 @@
 
 import { useAuth } from '@/hooks/useAuth';
 import { LogOut, User } from 'lucide-react';
-import Image from 'next/image';
 
 export default function PassengerProfile() {
   const { user, userData, signOut } = useAuth();
@@ -13,7 +12,8 @@ export default function PassengerProfile() {
       <div className="flex flex-col items-center mt-12 mb-12">
         <div className="w-24 h-24 rounded-full border border-[#333333] overflow-hidden mb-5 bg-[#141414] flex items-center justify-center">
           {user?.photoURL ? (
-            <Image src={user.photoURL} alt="Profile" width={96} height={96} className="object-cover" />
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.photoURL} alt="Profile" width={96} height={96} className="object-cover" />
           ) : (
             <User size={40} className="text-[#555555]" />
           )}

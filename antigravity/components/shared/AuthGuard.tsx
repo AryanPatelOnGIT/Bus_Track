@@ -18,7 +18,7 @@ export default function AuthGuard({ children, allowedRole }: AuthGuardProps) {
     if (!loading) {
       if (!user) {
         router.push('/');
-      } else if (userData && userData.role !== allowedRole) {
+      } else if (userData && userData.role !== allowedRole && userData.role !== 'admin') {
         router.push('/');
       }
     }
@@ -28,7 +28,7 @@ export default function AuthGuard({ children, allowedRole }: AuthGuardProps) {
     return <LoadingScreen />;
   }
 
-  if (userData.role !== allowedRole) {
+  if (userData.role !== allowedRole && userData.role !== 'admin') {
     return <LoadingScreen />;
   }
 

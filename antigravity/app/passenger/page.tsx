@@ -1,11 +1,20 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import AuthGuard from '@/components/shared/AuthGuard';
 import BottomNav from '@/components/shared/BottomNav';
 import { MapPin, User } from 'lucide-react';
-import PassengerMap from '@/components/passenger/PassengerMap';
 import PassengerProfile from '@/components/passenger/PassengerProfile';
+
+const PassengerMap = dynamic(() => import('@/components/passenger/PassengerMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full flex items-center justify-center bg-[#0A0A0A]">
+      <span className="text-[#888888] font-mono text-sm font-light">Loading map...</span>
+    </div>
+  ),
+});
 
 export default function PassengerPage() {
   const [activeTab, setActiveTab] = useState('map');

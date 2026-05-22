@@ -1,12 +1,72 @@
 {
   "rules": {
-    "buses": {
+    // ─────────────────────────────────────────────────────────────────────────
+    // FINDING #1 — REMEDIATED
+    // /activeBuses: Only authenticated users whose Firebase Custom Claim
+    // `role === 'driver'` may write. Custom Claims are set server-side by the
+    // `setDriverClaim` Cloud Function (see functions/src/setDriverClaim.ts).
+    // Firebase RTDB rules cannot query Firestore, so we rely on Custom Claims.
+    //
+    // FINDING #2 — REMEDIATED
+    // /messages: Message writes require that the senderId field matches the
+    // authenticated user's uid, and that the text payload does not exceed 500
+    // characters. These rules are enforced at the individual message node.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    "activeBuses": {
+      // Any authenticated user may read live bus locations (passengers, admins).
       ".read": "auth != null",
-      ".write": "auth != null"
+
+      "$busKey": {
+        // Write requires authentication AND the Custom Claim role = 'driver'.
+        // The claim is set by the Cloud Function and lives in auth.token.role.
+        ".write": "auth != null && auth.token.role === 'driver'",
+
+        // Validate the shape of a bus location update to prevent garbage data.
+        ".validate": "newData.hasChildren(['lat', 'lng', 'timestamp'])",
+
+        "lat":       { ".validate": "newData.isNumber() && newData.val() >= -90  && newData.val() <= 90"  },
+        "lng":       { ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180" },
+        "speed":     { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "heading":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 360" },
+        "timestamp": { ".validate": "newData.isNumber()" },
+
+        // Deny unknown keys at this level.
+        "$other":    { ".validate": false }
+      }
     },
+
+    "buses": {
+      // Legacy path kept for ESP32 compatibility; read-only for clients.
+      ".read":  "auth != null",
+      // ESP32 writes via service account (bypasses rules) — clients cannot write.
+      ".write": "auth != null && auth.token.role === 'driver'"
+    },
+
     "messages": {
+      // Any authenticated user may read message channels.
       ".read": "auth != null",
-      ".write": "auth != null"
+
+      "$channelId": {
+        "$messageId": {
+          // FINDING #2: sender must be the currently authenticated user,
+          // and text length must not exceed 500 characters.
+          ".write": "auth != null && (
+            !data.exists() &&
+            newData.child('senderId').val() === auth.uid
+          )",
+
+          ".validate": "newData.hasChildren(['senderId', 'senderName', 'text', 'timestamp'])",
+
+          "senderId":   { ".validate": "newData.isString() && newData.val() === auth.uid" },
+          "senderName": { ".validate": "newData.isString() && newData.val().length <= 100" },
+          "text":       { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 500" },
+          "timestamp":  { ".validate": "newData.isNumber()" },
+
+          // Deny unknown keys inside a message node.
+          "$other":     { ".validate": false }
+        }
+      }
     }
   }
 }

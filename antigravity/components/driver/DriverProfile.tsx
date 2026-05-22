@@ -3,7 +3,6 @@
 import { useAuth } from '@/hooks/useAuth';
 import { useDriverProfile } from '@/hooks/useDriverProfile';
 import { LogOut, Truck, Map as MapIcon, User } from 'lucide-react';
-import Image from 'next/image';
 
 export default function DriverProfile() {
   const { user, userData, signOut } = useAuth();
@@ -19,7 +18,8 @@ export default function DriverProfile() {
       <div className="flex flex-col items-center mt-8 mb-10">
         <div className="w-20 h-20 rounded-full border border-[#333333] overflow-hidden mb-4 bg-[#141414] flex items-center justify-center">
           {user?.photoURL ? (
-            <Image src={user.photoURL} alt="Profile" width={80} height={80} className="object-cover" />
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.photoURL} alt="Profile" width={80} height={80} className="object-cover" />
           ) : (
             <User size={32} className="text-[#555555]" />
           )}

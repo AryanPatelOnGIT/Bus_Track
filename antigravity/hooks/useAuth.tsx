@@ -31,12 +31,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(firebaseUser);
       if (firebaseUser) {
         try {
+          // Set cookie here to ensure it exists for middleware even if user reloads the page
+          const token = await firebaseUser.getIdToken();
+          document.cookie = `auth-token=${token}; path=/; max-age=3600`;
+
           const data = await getUserData(firebaseUser.uid);
           setUserData(data);
         } catch (error) {
           console.error('Error fetching user data', error);
         }
       } else {
+        document.cookie = 'auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         setUserData(null);
       }
       setLoading(false);
