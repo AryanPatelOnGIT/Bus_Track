@@ -1,0 +1,38 @@
+{
+  "rules": {
+    "activeBuses": {
+      ".read": "auth != null",
+      "$busKey": {
+        ".write": "auth != null && auth.token.role === 'driver'",
+        ".validate": "newData.hasChildren(['lat', 'lng', 'timestamp'])",
+        "lat":       { ".validate": "newData.isNumber() && newData.val() >= -90  && newData.val() <= 90"  },
+        "lng":       { ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180" },
+        "speed":     { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "heading":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 360" },
+        "timestamp": { ".validate": "newData.isNumber()" },
+        "$other":    { ".validate": false }
+      }
+    },
+    "buses": {
+      ".read":  "auth != null",
+      ".write": "auth != null && auth.token.role === 'driver'"
+    },
+    "messages": {
+      ".read": "auth != null",
+      "$channelId": {
+        "$messageId": {
+          ".write": "auth != null && (
+            !data.exists() &&
+            newData.child('senderId').val() === auth.uid
+          )",
+          ".validate": "newData.hasChildren(['senderId', 'senderName', 'text', 'timestamp'])",
+          "senderId":   { ".validate": "newData.isString() && newData.val() === auth.uid" },
+          "senderName": { ".validate": "newData.isString() && newData.val().length <= 100" },
+          "text":       { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 500" },
+          "timestamp":  { ".validate": "newData.isNumber()" },
+          "$other":     { ".validate": false }
+        }
+      }
+    }
+  }
+}

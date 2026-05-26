@@ -1,43 +1,72 @@
-# dependencies
+# Dependencies
 node_modules/
 .pnp
 .pnp.*
 .yarn/
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-# testing
-coverage/
-
-# next.js
+# Next.js
 .next/
 out/
+.agent/
+.gemini/
+next-env.d.ts
+*.tsbuildinfo
 
-# production
+# Build & Tooling
+dist/
 build/
+.turbo
+.vercel
+/coverage
 
-# misc
+# Environment Files (NEVER COMMIT)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+.env*.local
+
+# Firebase
+.firebase/
+*-debug.log
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+serviceAccountKey.json
+serviceAccountKey*.json
+service-account.json
+service-account*.json
+serviceAccount.json
+serviceAccount*.json
+
+# Misc
 .DS_Store
 *.pem
-
-# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.tmp
+*.log
 
-# env files
-.env
-.env.local
-.env.development
-.env.production
-.env.staging
-.env*.local
+# Diagnostic & Development Scripts
+test-*.ts
+test-*.js
+read-*.ts
+list-*.ts
 
-# vercel
-.vercel
+# Media & Storage
+artifacts/
+temp/
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# credentials
-*serviceAccountKey.json
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
